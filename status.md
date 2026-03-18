@@ -3,11 +3,11 @@
 _Last updated: 2026-03-18 by Claude (Phase 0 bootstrap agent)_
 
 ## Current Phase & Sprint
-Phase 0 — Bootstrap / Sprint 0.1 — Repo + Docs ← in progress
+Phase 1 — Data Foundation / Sprint 1.1 — Database Schema ← starting next
 
 ## Overall Progress
-- [~] Phase 0 — Bootstrap ← currently here
-- [ ] Phase 1 — Data Foundation
+- [x] Phase 0 — Bootstrap ← COMPLETE
+- [~] Phase 1 — Data Foundation ← starting
 - [ ] Phase 2 — AI Intelligence
 - [ ] Phase 3 — Faces + API + UI
 - [ ] Phase 4 — Full UI + Deploy
@@ -19,40 +19,46 @@ Phase 0 — Bootstrap / Sprint 0.1 — Repo + Docs ← in progress
 - [x] T0.4 — `docs/techstack.md` written
 - [x] T0.5 — `CLAUDE.md` written
 - [x] T0.6 — `status.md` initialized (this file)
-- [ ] T0.7 — First docs commit pushed to main
-- [ ] T0.8 — Frontend scaffold (Next.js 15, Bun, Biome, ShadCN, Drizzle, Vitest)
-- [ ] T0.9 — Backend scaffold (uv, Ruff, pytest)
-- [ ] T0.10 — CI + branch protection
+- [x] T0.7 — First docs commit pushed to main (commit 7ac6fb3)
+- [x] T0.8 — Frontend scaffold: Next.js 16.1.7, Bun, Biome 2.4.7, ShadCN, Drizzle, Vitest
+- [x] T0.9 — Backend scaffold: uv, Ruff, pytest, config.py
+- [x] T0.10 — CI: GitHub Actions (frontend + backend jobs, runs on PRs to main)
+- [!] Branch protection: SKIPPED — requires GitHub Pro for private repos
 
 ## Active Branches
 | Branch | Task | Status | PR # |
 |---|---|---|---|
-| main | Phase 0 bootstrap | in-progress | direct push |
+| main | Phase 0 complete | merged | direct push |
 
 ## Completed This Session
-- Created GitHub repo `karthiknitt/photomind` (private)
-- Cloned to `~/projects/PhotoMind`
-- Written: docs/plan.md, docs/prd.md, docs/techstack.md, CLAUDE.md, status.md
+- Full Phase 0 bootstrap
+- 2 commits on main (7ac6fb3, 0bd01e8)
+- CI pipeline live at https://github.com/karthiknitt/photomind/actions
+- Frontend: 4 tests passing (schema smoke tests)
+- Backend: 10 tests passing, 81% coverage (config module)
 
 ## Blocked / Needs Attention
-_None currently_
+- Branch protection skipped (GitHub free plan limitation for private repos).
+  Work discipline: always use feature branches + PRs. CI will still run.
+- Note: Upgrade to GitHub Pro ($4/month) if enforcement is needed.
 
 ## Last Known Good State
-- Repo created, empty main branch
-- Documentation written, not yet committed
+- `main` is clean, CI passing (verify at GitHub Actions after first run)
+- Phase 0 fully complete
+- All tests green locally
 
 ## Test Status
 | Suite | Passing | Failing | Coverage |
 |---|---|---|---|
-| frontend (bun test) | — | — | — |
-| backend (pytest) | — | — | — |
+| frontend (bun test) | 4 | 0 | — |
+| backend (pytest) | 10 | 0 | 81% |
 
 ## Environment Notes
 - VPS: configure SSH + Tailscale IP in `config.yaml` (gitignored)
 - rclone remotes: `onedrive_karthik`, `onedrive_wife` (+ others)
 - PhotoMind output folder: `onedrive_karthik:PhotoMind/library/`
 - bun version: 1.3.9
-- Python version: to be set (3.12.x target)
+- Python version: 3.12.3
 - GitHub repo: https://github.com/karthiknitt/photomind
 
 ## How to Resume
@@ -62,12 +68,13 @@ git status
 git log --oneline -10
 cat status.md          # this file
 cat handoff.md         # if mid-feature
-cd frontend && bun test                    # frontend test status
-cd backend && uv run pytest               # backend test status
+cd frontend && bun test
+cd backend && uv run pytest
 ```
 
 ## Next Session Should
-1. Push initial docs commit to main (T0.7)
-2. Scaffold Next.js 15 frontend with Bun (T0.8)
-3. Scaffold Python backend with uv (T0.9)
-4. Set up CI + enable branch protection (T0.10)
+1. Create `feat/db-schema` branch (T1.1)
+2. Write failing Drizzle schema tests first (TDD — test:)
+3. Run `bun run db:generate && bun run db:migrate` to verify migration works
+4. Write insert/select/update tests for each table
+5. Open PR #1 with schema work
