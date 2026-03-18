@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  # ─── Frontend ──────────────────────────────────────────────────────────────
+  frontend:
+    name: Frontend (Bun + Biome + Vitest)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: bun install --frozen-lockfile
+
+      - name: Biome lint + format check
+        working-directory: frontend
+        run: bunx biome ci .
+
+      - name: Type check
+        working-directory: frontend
+        run: bunx tsc --noEmit
+
+      - name: Run tests
+        working-directory: frontend
+        env:
+          DATABASE_PATH: /tmp/photomind-test.db
+        run: bun test
+
+  # ─── Backend ───────────────────────────────────────────────────────────────
+  backend:
+    name: Backend (uv + Ruff + pytest)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: latest
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install dependencies
+        working-directory: backend
+        run: uv sync
+
+      - name: Ruff lint
+        working-directory: backend
+        run: uv run ruff check src/ tests/
+
+      - name: Ruff format check
+        working-directory: backend
+        run: uv run ruff format --check src/ tests/
+
+      - name: Run tests with coverage
+        working-directory: backend
+        env:
+          DATABASE_PATH: /tmp/photomind-test.db
+        run: uv run pytest --cov-fail-under=80
