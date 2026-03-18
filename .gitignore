@@ -1,0 +1,60 @@
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+config.yaml
+
+# Database & AI data
+photomind.db
+photomind.db-shm
+photomind.db-wal
+chroma_db/
+thumbnails/
+tmp/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.ruff_cache/
+*.egg-info/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node / Bun
+node_modules/
+.next/
+frontend/.next/
+frontend/out/
+frontend/dist/
+
+# Bun
+bun.lockb
+*.bun
+
+# Drizzle
+frontend/drizzle/meta/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Worktrees (local only)
+.worktrees/
+
+# InsightFace model cache
+~/.insightface/
+backend/.insightface/
