@@ -27,7 +27,12 @@ from photomind.services.rclone import (
 # ---------------------------------------------------------------------------
 
 SAMPLE_LSJSON = [
-    {"Path": "2024/IMG_001.jpg", "Name": "IMG_001.jpg", "Size": 4200000, "IsDir": False},
+    {
+        "Path": "2024/IMG_001.jpg",
+        "Name": "IMG_001.jpg",
+        "Size": 4200000,
+        "IsDir": False,
+    },
     {"Path": "2024/subfolder", "Name": "subfolder", "Size": -1, "IsDir": True},
 ]
 
@@ -54,7 +59,7 @@ class TestListFiles:
         """list_files returns a list of RemoteFile from valid rclone lsjson output."""
         mock_result = _make_completed_process(stdout=json.dumps(SAMPLE_LSJSON))
 
-        with patch("subprocess.run", return_value=mock_result) as mock_run:
+        with patch("subprocess.run", return_value=mock_result):
             result = list_files("onedrive_karthik", "/Pictures/2024")
 
         assert len(result) == 2
@@ -233,9 +238,7 @@ class TestUploadFile:
         mock_result = _make_completed_process()
 
         with patch("subprocess.run", return_value=mock_result) as mock_run:
-            upload_file(
-                str(local_file), "onedrive_karthik", "/PhotoMind/library/2024"
-            )
+            upload_file(str(local_file), "onedrive_karthik", "/PhotoMind/library/2024")
 
         cmd = mock_run.call_args[0][0]
         assert cmd[2] == str(local_file)
