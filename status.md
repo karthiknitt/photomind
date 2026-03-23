@@ -7,7 +7,7 @@ Phase 1 — Data Foundation / Sprint 1.3 COMPLETE → Phase 2 Sprint 2.1 next
 
 ## Overall Progress
 - [x] Phase 0 — Bootstrap ← COMPLETE
-- [~] Phase 1 — Data Foundation ← in progress (Sprints 1.1–1.3 done, PRs open)
+- [x] Phase 1 — Data Foundation ← COMPLETE (all PRs merged)
 - [ ] Phase 2 — AI Intelligence
 - [ ] Phase 3 — Faces + API + UI
 - [ ] Phase 4 — Full UI + Deploy
@@ -18,8 +18,8 @@ Phase 1 — Data Foundation / Sprint 1.3 COMPLETE → Phase 2 Sprint 2.1 next
 - [x] T1.2 — EXIF service (PR #5 merged)
 - [x] T1.2 — Thumbnail service (PR #3 merged)
 - [x] T1.2 — Action log helper (PR #4 merged)
-- [~] T1.3 — Dedup service: 22 tests, 100% coverage (PR #6 open, awaiting review)
-- [~] T1.3 — Meme detector: 30 tests, 97% coverage (PR #7 open, awaiting review)
+- [x] T1.3 — Dedup service: 25 tests, 100% coverage (PR #6 merged)
+- [x] T1.3 — Meme detector: 30 tests, 97% coverage (PR #7 merged)
 
 ## Phase 0 Task Status
 - [x] T0.1 — GitHub repo created (`karthiknitt/photomind`, private)
@@ -43,8 +43,8 @@ Phase 1 — Data Foundation / Sprint 1.3 COMPLETE → Phase 2 Sprint 2.1 next
 | feat/thumbnail-service | T1.2 thumbnail | merged | #3 |
 | feat/action-log | T1.2 action log | merged | #4 |
 | feat/exif-service | T1.2 EXIF | merged | #5 |
-| feat/dedup-service | T1.3 dedup | PR open | #6 |
-| feat/meme-detector | T1.3 meme | PR open | #7 |
+| feat/dedup-service | T1.3 dedup | merged | #6 |
+| feat/meme-detector | T1.3 meme | merged | #7 |
 
 ## Completed This Session
 - Sprint 1.3: Dedup service + Meme detector (both TDD, 52 new tests)
@@ -89,8 +89,7 @@ cd backend && uv run pytest
 ```
 
 ## Next Session Should
-1. Merge PRs #6 (dedup) and #7 (meme) after CI + CodeRabbit review
-2. Sprint 2.1: Start 2 parallel Phase 2 services:
+1. Sprint 2.1: Start 2 parallel Phase 2 services:
    - feat/clip-service: open_clip ViT-B/32 float16 embeddings + ChromaDB insert
    - feat/geo-service: reverse_geocoder offline GPS→city/state/country
 3. Each in its own worktree, TDD cycle
