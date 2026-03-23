@@ -8,11 +8,20 @@
  * files in ./drizzle/ — that is expected and intentional.
  */
 import { Database } from "bun:sqlite";
-import { sql, eq } from "drizzle-orm";
+import path from "node:path";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
-import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type {
+  NewActionLog,
+  NewEvent,
+  NewFace,
+  NewFaceCluster,
+  NewPhoto,
+  NewPhotoTag,
+  NewSource,
+} from "@/lib/db/schema";
 import * as schema from "@/lib/db/schema";
 import {
   actionLog,
@@ -22,15 +31,6 @@ import {
   photos,
   photoTags,
   sources,
-} from "@/lib/db/schema";
-import type {
-  NewActionLog,
-  NewEvent,
-  NewFace,
-  NewFaceCluster,
-  NewPhoto,
-  NewPhotoTag,
-  NewSource,
 } from "@/lib/db/schema";
 
 // ─── Test DB factory ──────────────────────────────────────────────────────────
@@ -90,10 +90,7 @@ describe("photos table", () => {
   it("inserts and retrieves a minimal photo record", async () => {
     const photo = makePhoto();
     await db.insert(photos).values(photo);
-    const [found] = await db
-      .select()
-      .from(photos)
-      .where(eq(photos.id, photo.id));
+    const [found] = await db.select().from(photos).where(eq(photos.id, photo.id));
     expect(found.id).toBe(photo.id);
     expect(found.sourceRemote).toBe("onedrive_karthik");
     expect(found.sourcePath).toBe("/Pictures/2024/test.jpg");
@@ -102,30 +99,21 @@ describe("photos table", () => {
   it("applies default status QUEUED when not specified", async () => {
     const photo = makePhoto();
     await db.insert(photos).values(photo);
-    const [found] = await db
-      .select()
-      .from(photos)
-      .where(eq(photos.id, photo.id));
+    const [found] = await db.select().from(photos).where(eq(photos.id, photo.id));
     expect(found.status).toBe("QUEUED");
   });
 
   it("applies default isMeme=false", async () => {
     const photo = makePhoto();
     await db.insert(photos).values(photo);
-    const [found] = await db
-      .select()
-      .from(photos)
-      .where(eq(photos.id, photo.id));
+    const [found] = await db.select().from(photos).where(eq(photos.id, photo.id));
     expect(found.isMeme).toBe(false);
   });
 
   it("applies default clipIndexed=false and faceCount=0", async () => {
     const photo = makePhoto();
     await db.insert(photos).values(photo);
-    const [found] = await db
-      .select()
-      .from(photos)
-      .where(eq(photos.id, photo.id));
+    const [found] = await db.select().from(photos).where(eq(photos.id, photo.id));
     expect(found.clipIndexed).toBe(false);
     expect(found.faceCount).toBe(0);
   });
@@ -146,10 +134,7 @@ describe("photos table", () => {
       phash: "abc123def456",
     });
     await db.insert(photos).values(photo);
-    const [found] = await db
-      .select()
-      .from(photos)
-      .where(eq(photos.id, photo.id));
+    const [found] = await db.select().from(photos).where(eq(photos.id, photo.id));
     expect(found.gpsLat).toBeCloseTo(11.0168);
     expect(found.city).toBe("Ooty");
     expect(found.cameraMake).toBe("Apple");
@@ -164,10 +149,7 @@ describe("photos table", () => {
       .update(photos)
       .set({ status: "DONE", updatedAt: later })
       .where(eq(photos.id, photo.id));
-    const [found] = await db
-      .select()
-      .from(photos)
-      .where(eq(photos.id, photo.id));
+    const [found] = await db.select().from(photos).where(eq(photos.id, photo.id));
     expect(found.status).toBe("DONE");
     expect(found.updatedAt).toBe(later);
   });
@@ -178,10 +160,7 @@ describe("photos table", () => {
       memeReason: "whatsapp,aspect_ratio",
     });
     await db.insert(photos).values(photo);
-    const [found] = await db
-      .select()
-      .from(photos)
-      .where(eq(photos.id, photo.id));
+    const [found] = await db.select().from(photos).where(eq(photos.id, photo.id));
     expect(found.isMeme).toBe(true);
     expect(found.memeReason).toBe("whatsapp,aspect_ratio");
   });
@@ -189,7 +168,8 @@ describe("photos table", () => {
   it("enforces unique id — duplicate insert throws", async () => {
     const photo = makePhoto();
     await db.insert(photos).values(photo);
-    await expect(db.insert(photos).values(photo)).rejects.toThrow();
+    const duplicate = async () => db.insert(photos).values(photo);
+    await expect(duplicate()).rejects.toThrow();
   });
 });
 
@@ -210,10 +190,7 @@ describe("face_clusters table", () => {
   it("inserts a cluster with no label (nullable)", async () => {
     const cluster = makeCluster();
     await db.insert(faceClusters).values(cluster);
-    const [found] = await db
-      .select()
-      .from(faceClusters)
-      .where(eq(faceClusters.id, cluster.id));
+    const [found] = await db.select().from(faceClusters).where(eq(faceClusters.id, cluster.id));
     expect(found.label).toBeNull();
     expect(found.photoCount).toBe(0);
   });
@@ -225,10 +202,7 @@ describe("face_clusters table", () => {
       .update(faceClusters)
       .set({ label: "Karthik", photoCount: 42 })
       .where(eq(faceClusters.id, cluster.id));
-    const [found] = await db
-      .select()
-      .from(faceClusters)
-      .where(eq(faceClusters.id, cluster.id));
+    const [found] = await db.select().from(faceClusters).where(eq(faceClusters.id, cluster.id));
     expect(found.label).toBe("Karthik");
     expect(found.photoCount).toBe(42);
   });
@@ -263,10 +237,7 @@ describe("faces table", () => {
       detScore: 0.97,
     };
     await db.insert(faces).values(face);
-    const [found] = await db
-      .select()
-      .from(faces)
-      .where(eq(faces.id, face.id));
+    const [found] = await db.select().from(faces).where(eq(faces.id, face.id));
     expect(found.photoId).toBe(photoId);
     expect(found.detScore).toBeCloseTo(0.97);
     expect(found.clusterId).toBeNull();
@@ -283,10 +254,7 @@ describe("faces table", () => {
       detScore: 0.91,
     };
     await db.insert(faces).values(face);
-    const [found] = await db
-      .select()
-      .from(faces)
-      .where(eq(faces.id, face.id));
+    const [found] = await db.select().from(faces).where(eq(faces.id, face.id));
     expect(found.clusterId).toBe(cluster.id);
   });
 
@@ -295,7 +263,8 @@ describe("faces table", () => {
       id: crypto.randomUUID(),
       photoId: "does-not-exist",
     };
-    await expect(db.insert(faces).values(face)).rejects.toThrow();
+    const insert = async () => db.insert(faces).values(face);
+    await expect(insert()).rejects.toThrow();
   });
 });
 
@@ -326,10 +295,7 @@ describe("photo_tags table", () => {
       confidence: 0.88,
     };
     await db.insert(photoTags).values(tag);
-    const [found] = await db
-      .select()
-      .from(photoTags)
-      .where(eq(photoTags.id, tag.id));
+    const [found] = await db.select().from(photoTags).where(eq(photoTags.id, tag.id));
     expect(found.tag).toBe("mountain landscape");
     expect(found.source).toBe("clip");
     expect(found.confidence).toBeCloseTo(0.88);
@@ -343,10 +309,7 @@ describe("photo_tags table", () => {
       source: "manual",
     };
     await db.insert(photoTags).values(tag);
-    const [found] = await db
-      .select()
-      .from(photoTags)
-      .where(eq(photoTags.id, tag.id));
+    const [found] = await db.select().from(photoTags).where(eq(photoTags.id, tag.id));
     expect(found.source).toBe("manual");
     expect(found.confidence).toBeNull();
   });
@@ -358,7 +321,8 @@ describe("photo_tags table", () => {
       tag: "sunset",
       source: "clip",
     };
-    await expect(db.insert(photoTags).values(tag)).rejects.toThrow();
+    const insert = async () => db.insert(photoTags).values(tag);
+    await expect(insert()).rejects.toThrow();
   });
 });
 
@@ -384,10 +348,7 @@ describe("events table", () => {
       dateEnd: 1735200000,
     };
     await db.insert(events).values(event);
-    const [found] = await db
-      .select()
-      .from(events)
-      .where(eq(events.id, event.id));
+    const [found] = await db.select().from(events).where(eq(events.id, event.id));
     expect(found.name).toBe("Ooty Trip 2024");
     expect(found.coverPhotoId).toBeNull();
   });
@@ -402,10 +363,7 @@ describe("events table", () => {
       coverPhotoId: photo.id,
     };
     await db.insert(events).values(event);
-    const [found] = await db
-      .select()
-      .from(events)
-      .where(eq(events.id, event.id));
+    const [found] = await db.select().from(events).where(eq(events.id, event.id));
     expect(found.coverPhotoId).toBe(photo.id);
   });
 });
@@ -437,10 +395,7 @@ describe("action_log table", () => {
       timestamp: NOW,
     };
     await db.insert(actionLog).values(entry);
-    const [found] = await db
-      .select()
-      .from(actionLog)
-      .where(eq(actionLog.id, entry.id));
+    const [found] = await db.select().from(actionLog).where(eq(actionLog.id, entry.id));
     expect(found.action).toBe("COPIED");
     expect(found.photoId).toBe(photoId);
   });
@@ -453,10 +408,7 @@ describe("action_log table", () => {
       timestamp: NOW,
     };
     await db.insert(actionLog).values(entry);
-    const [found] = await db
-      .select()
-      .from(actionLog)
-      .where(eq(actionLog.id, entry.id));
+    const [found] = await db.select().from(actionLog).where(eq(actionLog.id, entry.id));
     expect(found.action).toBe("SKIPPED_DUPLICATE");
     expect(found.photoId).toBeNull();
   });
@@ -505,10 +457,7 @@ describe("sources table", () => {
       scanPath: "/Pictures",
     };
     await db.insert(sources).values(source);
-    const [found] = await db
-      .select()
-      .from(sources)
-      .where(eq(sources.id, source.id));
+    const [found] = await db.select().from(sources).where(eq(sources.id, source.id));
     expect(found.remoteName).toBe("onedrive_karthik");
     expect(found.enabled).toBe(true);
     expect(found.lastScannedAt).toBeNull();
@@ -522,14 +471,8 @@ describe("sources table", () => {
       scanPath: "/Camera Roll",
     };
     await db.insert(sources).values(source);
-    await db
-      .update(sources)
-      .set({ lastScannedAt: NOW })
-      .where(eq(sources.id, source.id));
-    const [found] = await db
-      .select()
-      .from(sources)
-      .where(eq(sources.id, source.id));
+    await db.update(sources).set({ lastScannedAt: NOW }).where(eq(sources.id, source.id));
+    const [found] = await db.select().from(sources).where(eq(sources.id, source.id));
     expect(found.lastScannedAt).toBe(NOW);
   });
 
@@ -542,10 +485,7 @@ describe("sources table", () => {
       enabled: false,
     };
     await db.insert(sources).values(source);
-    const [found] = await db
-      .select()
-      .from(sources)
-      .where(eq(sources.id, source.id));
+    const [found] = await db.select().from(sources).where(eq(sources.id, source.id));
     expect(found.enabled).toBe(false);
   });
 });
