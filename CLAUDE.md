@@ -162,3 +162,85 @@ Before marking any task complete:
 - [ ] `status.md` updated
 - [ ] `handoff.md` updated (if applicable)
 - [ ] PR description follows template in `docs/plan.md`
+
+---
+
+## PR Submission + CodeRabbit Workflow
+
+Scripts live in `scripts/`. Run from the project root.
+
+### Submitting a PR
+
+```bash
+scripts/submit-pr.sh <branch> "<title>" [base_branch]
+# Example:
+scripts/submit-pr.sh feat/exif-service "feat(exif): add EXIF extraction service"
+```
+
+This creates the PR and attempts to assign `coderabbitai` as reviewer. CodeRabbit will
+auto-review within ~2 minutes (free tier, public repo, one PR at a time).
+
+### Processing CodeRabbit comments (Claude's workflow)
+
+```bash
+# 1. Wait for CodeRabbit to finish reviewing
+scripts/review-pr.sh <PR> wait
+
+# 2. Dump all comments (inline + PR-level + review walkthrough)
+scripts/review-pr.sh <PR> dump
+
+# 3a. For VALID comments — reply "working on it", implement fix, commit, reply "fixed"
+scripts/review-pr.sh <PR> reply-inline <comment_id> "Working on it."
+# ... implement fix, git commit ...
+scripts/review-pr.sh <PR> reply-inline <comment_id> "Fixed in $(git rev-parse --short HEAD)."
+
+# 3b. For INVALID comments — explain disagreement inline
+scripts/review-pr.sh <PR> reply-inline <comment_id> "Disagree: <reason>"
+
+# 4. Post a final PR-level summary
+scripts/review-pr.sh <PR> reply-pr "All actionable comments addressed. Merging."
+
+# 5. Merge (checks for conflicts first)
+scripts/review-pr.sh <PR> merge
+
+# 6. Sync local main
+scripts/review-pr.sh <PR> sync
+```
+
+### Comment validity guidelines
+
+| Comment type | Action |
+|---|---|
+| Real bug / correctness issue | Valid — fix it |
+| Security concern | Valid — fix it |
+| Style already covered by ruff/biome | Invalid — disagree |
+| False positive (e.g. pathlib trailing slash in Python 3.12) | Invalid — explain why |
+| Architecture suggestion (out of scope for current PR) | Note it, decline politely |
+
+### Multiple PR queue
+
+CodeRabbit free = one PR reviewed at a time. Submit all PRs, then process serially:
+
+```bash
+for PR in $(gh pr list --json number --jq '.[].number'); do
+  scripts/review-pr.sh $PR wait
+  scripts/review-pr.sh $PR dump
+  # ... Claude reads dump, replies, implements fixes ...
+  scripts/review-pr.sh $PR merge
+  scripts/review-pr.sh $PR sync
+done
+```
+
+---
+
+## Development Skills (Always Use)
+
+When developing this Next.js project, always use these two skills:
+
+- **`/portless`** — Use when starting the dev server. Provides a public URL for the local server without needing to expose ports manually.
+- **`/agent-browser`** — Use to verify UI behavior in the browser after making changes. Run after starting the dev server to visually confirm pages load correctly, forms work, and key UI renders as expected.
+
+Workflow:
+1. Start dev server → use `/portless` to get a public URL
+2. After any UI change → use `/agent-browser` to verify it looks and works correctly
+3. Before marking any feature complete → run `/agent-browser` to do a visual gut-check
