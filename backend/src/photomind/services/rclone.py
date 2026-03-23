@@ -55,16 +55,21 @@ def list_files(remote: str, remote_path: str) -> list[RemoteFile]:
             f"(exit {result.returncode}): {result.stderr.strip()}"
         )
 
-    entries: list[dict[str, object]] = json.loads(result.stdout)
-    return [
-        RemoteFile(
-            path=str(entry["Path"]),
-            name=str(entry["Name"]),
-            size=int(entry["Size"]),  # type: ignore[arg-type]
-            is_dir=bool(entry["IsDir"]),
-        )
-        for entry in entries
-    ]
+    try:
+        entries: list[dict[str, object]] = json.loads(result.stdout)
+        return [
+            RemoteFile(
+                path=str(entry["Path"]),
+                name=str(entry["Name"]),
+                size=int(entry["Size"]),  # type: ignore[arg-type]
+                is_dir=bool(entry["IsDir"]),
+            )
+            for entry in entries
+        ]
+    except (json.JSONDecodeError, KeyError) as exc:
+        raise RcloneError(
+            f"Failed to parse rclone lsjson output for {target!r}: {exc}"
+        ) from exc
 
 
 def download_file(

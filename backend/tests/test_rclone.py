@@ -26,6 +26,9 @@ from photomind.services.rclone import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+# Patch target — module-level is more robust than patching subprocess globally
+_PATCH_RUN = "photomind.services.rclone.subprocess.run"
+
 SAMPLE_LSJSON = [
     {
         "Path": "2024/IMG_001.jpg",
@@ -59,7 +62,7 @@ class TestListFiles:
         """list_files returns a list of RemoteFile from valid rclone lsjson output."""
         mock_result = _make_completed_process(stdout=json.dumps(SAMPLE_LSJSON))
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch(_PATCH_RUN, return_value=mock_result):
             result = list_files("onedrive_karthik", "/Pictures/2024")
 
         assert len(result) == 2
@@ -69,7 +72,7 @@ class TestListFiles:
         """list_files maps Path, Name, Size, IsDir correctly to RemoteFile fields."""
         mock_result = _make_completed_process(stdout=json.dumps(SAMPLE_LSJSON))
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch(_PATCH_RUN, return_value=mock_result):
             result = list_files("onedrive_karthik", "/Pictures/2024")
 
         file_item = result[0]
@@ -88,7 +91,7 @@ class TestListFiles:
         """list_files invokes `rclone lsjson <remote>:<path>`."""
         mock_result = _make_completed_process(stdout=json.dumps(SAMPLE_LSJSON))
 
-        with patch("subprocess.run", return_value=mock_result) as mock_run:
+        with patch(_PATCH_RUN, return_value=mock_result) as mock_run:
             list_files("onedrive_karthik", "/Pictures/2024")
 
         mock_run.assert_called_once()
@@ -103,7 +106,7 @@ class TestListFiles:
             stderr="NOTICE: Failed to list directory", returncode=1
         )
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch(_PATCH_RUN, return_value=mock_result):
             with pytest.raises(RcloneError):
                 list_files("onedrive_karthik", "/Pictures/2024")
 
@@ -111,7 +114,7 @@ class TestListFiles:
         """list_files returns an empty list when rclone returns []."""
         mock_result = _make_completed_process(stdout="[]")
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch(_PATCH_RUN, return_value=mock_result):
             result = list_files("onedrive_karthik", "/empty-folder")
 
         assert result == []
@@ -120,7 +123,7 @@ class TestListFiles:
         """list_files passes capture_output=True, text=True to subprocess.run."""
         mock_result = _make_completed_process(stdout=json.dumps(SAMPLE_LSJSON))
 
-        with patch("subprocess.run", return_value=mock_result) as mock_run:
+        with patch(_PATCH_RUN, return_value=mock_result) as mock_run:
             list_files("onedrive_karthik", "/Pictures/2024")
 
         _, kwargs = mock_run.call_args
@@ -138,7 +141,7 @@ class TestDownloadFile:
         """download_file invokes `rclone copy <remote>:<path> <local_dir>`."""
         mock_result = _make_completed_process()
 
-        with patch("subprocess.run", return_value=mock_result) as mock_run:
+        with patch(_PATCH_RUN, return_value=mock_result) as mock_run:
             download_file("onedrive_karthik", "/Pictures/2024/IMG_001.jpg", tmp_path)
 
         mock_run.assert_called_once()
@@ -154,7 +157,7 @@ class TestDownloadFile:
             stderr="ERROR: transfer failed", returncode=1
         )
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch(_PATCH_RUN, return_value=mock_result):
             with pytest.raises(RcloneError):
                 download_file(
                     "onedrive_karthik", "/Pictures/2024/IMG_001.jpg", tmp_path
@@ -164,7 +167,7 @@ class TestDownloadFile:
         """download_file returns Path pointing to local_dest / filename."""
         mock_result = _make_completed_process()
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch(_PATCH_RUN, return_value=mock_result):
             result = download_file(
                 "onedrive_karthik", "/Pictures/2024/IMG_001.jpg", tmp_path
             )
@@ -176,7 +179,7 @@ class TestDownloadFile:
         """download_file accepts local_dest as a plain string."""
         mock_result = _make_completed_process()
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch(_PATCH_RUN, return_value=mock_result):
             result = download_file(
                 "onedrive_karthik",
                 "/Pictures/2024/IMG_001.jpg",
@@ -189,7 +192,7 @@ class TestDownloadFile:
         """download_file passes capture_output=True, text=True to subprocess.run."""
         mock_result = _make_completed_process()
 
-        with patch("subprocess.run", return_value=mock_result) as mock_run:
+        with patch(_PATCH_RUN, return_value=mock_result) as mock_run:
             download_file("onedrive_karthik", "/Pictures/2024/IMG_001.jpg", tmp_path)
 
         _, kwargs = mock_run.call_args
@@ -209,7 +212,7 @@ class TestUploadFile:
         local_file.touch()
         mock_result = _make_completed_process()
 
-        with patch("subprocess.run", return_value=mock_result) as mock_run:
+        with patch(_PATCH_RUN, return_value=mock_result) as mock_run:
             upload_file(local_file, "onedrive_karthik", "/PhotoMind/library/2024")
 
         mock_run.assert_called_once()
@@ -227,7 +230,7 @@ class TestUploadFile:
             stderr="ERROR: upload failed", returncode=2
         )
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch(_PATCH_RUN, return_value=mock_result):
             with pytest.raises(RcloneError):
                 upload_file(local_file, "onedrive_karthik", "/PhotoMind/library/2024")
 
@@ -237,7 +240,7 @@ class TestUploadFile:
         local_file.touch()
         mock_result = _make_completed_process()
 
-        with patch("subprocess.run", return_value=mock_result) as mock_run:
+        with patch(_PATCH_RUN, return_value=mock_result) as mock_run:
             upload_file(str(local_file), "onedrive_karthik", "/PhotoMind/library/2024")
 
         cmd = mock_run.call_args[0][0]
@@ -249,7 +252,7 @@ class TestUploadFile:
         local_file.touch()
         mock_result = _make_completed_process()
 
-        with patch("subprocess.run", return_value=mock_result) as mock_run:
+        with patch(_PATCH_RUN, return_value=mock_result) as mock_run:
             upload_file(local_file, "onedrive_karthik", "/PhotoMind/library/2024")
 
         _, kwargs = mock_run.call_args
@@ -262,9 +265,55 @@ class TestUploadFile:
         local_file.touch()
         mock_result = _make_completed_process()
 
-        with patch("subprocess.run", return_value=mock_result):
+        with patch(_PATCH_RUN, return_value=mock_result):
             result = upload_file(
                 local_file, "onedrive_karthik", "/PhotoMind/library/2024"
             )
 
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Fix 1: trailing slash in remote_path must not produce empty filename
+# ---------------------------------------------------------------------------
+
+
+class TestDownloadFileTrailingSlash:
+    def test_trailing_slash_returns_correct_filename(self, tmp_path):
+        """download_file strips trailing slash before extracting filename.
+
+        Path("Photos/IMG_001.jpg/").name returns "" — the slash must be
+        stripped first so the caller gets local_dest / "IMG_001.jpg", not
+        local_dest alone (which would be a directory, not a file).
+        """
+        mock_result = _make_completed_process()
+
+        with patch(_PATCH_RUN, return_value=mock_result):
+            result = download_file(
+                "onedrive_karthik", "/Pictures/2024/IMG_001.jpg/", tmp_path
+            )
+
+        assert result == tmp_path / "IMG_001.jpg"
+
+
+# ---------------------------------------------------------------------------
+# Fix 2: malformed rclone output must raise RcloneError, not JSONDecodeError
+# ---------------------------------------------------------------------------
+
+
+class TestListFilesParseErrors:
+    def test_malformed_json_raises_rclone_error(self):
+        """list_files raises RcloneError when rclone stdout is not valid JSON."""
+        mock_result = _make_completed_process(stdout="not valid json {{ }")
+
+        with patch(_PATCH_RUN, return_value=mock_result):
+            with pytest.raises(RcloneError, match="Failed to parse"):
+                list_files("onedrive_karthik", "/Pictures/2024")
+
+    def test_missing_json_keys_raises_rclone_error(self):
+        """list_files raises RcloneError when JSON entries lack expected keys."""
+        mock_result = _make_completed_process(stdout='[{"Unexpected": "field"}]')
+
+        with patch(_PATCH_RUN, return_value=mock_result):
+            with pytest.raises(RcloneError, match="Failed to parse"):
+                list_files("onedrive_karthik", "/Pictures/2024")
