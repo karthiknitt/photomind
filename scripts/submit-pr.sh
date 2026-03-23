@@ -1,21 +1,69 @@
 #!/usr/bin/env bash
 # submit-pr.sh — create a PR and assign coderabbitai[bot] as reviewer
 #
-# Usage: scripts/submit-pr.sh <branch> "<title>" [base_branch]
+# Usage: scripts/submit-pr.sh <branch> "<title>" [base_branch] <<'EOF'
+#   ## What
+#   ...
+#   ## Why
+#   ...
+#   EOF
 #
-# Examples:
-#   scripts/submit-pr.sh feat/exif-service "feat(exif): add EXIF extraction service"
-#   scripts/submit-pr.sh fix/thumbnail "fix(thumbnail): handle RGBA images" main
+# The PR body is read from stdin. A heredoc is the recommended way to pass it:
+#
+#   scripts/submit-pr.sh feat/exif-service "feat(exif): add EXIF extraction service" main <<'EOF'
+#   ## What
+#   EXIF extraction service using Pillow. Extracts date, GPS, camera, software.
+#
+#   ## Why
+#   Pipeline stage 3 needs structured metadata from raw files before any AI work.
+#
+#   ## Tests (N new, M total)
+#   - test_case_1
+#   - test_case_2
+#
+#   ## Results
+#   - N/N pass, X% coverage
+#   - Ruff clean
+#   EOF
+#
+# If stdin is a terminal (no pipe/heredoc), a skeleton placeholder is used.
 #
 # Requirements: gh CLI authenticated as karthiknitt
 
 set -euo pipefail
 
-BRANCH="${1:?Usage: $0 <branch> <title> [base_branch]}"
-TITLE="${2:?Usage: $0 <branch> <title> [base_branch]}"
+BRANCH="${1:?Usage: $0 <branch> <title> [base_branch] < body}"
+TITLE="${2:?Usage: $0 <branch> <title> [base_branch] < body}"
 BASE="${3:-main}"
 
 REPO="karthiknitt/photomind"
+
+# Read body from stdin if available; otherwise use a placeholder skeleton.
+if [ -t 0 ]; then
+  PR_BODY="$(cat <<'SKELETON'
+## What
+
+<!-- TODO: describe what this PR adds/changes -->
+
+## Why
+
+<!-- TODO: explain motivation and design decisions -->
+
+## Tests
+
+<!-- TODO: list new tests and totals -->
+
+## Results
+
+<!-- TODO: pass count, coverage, lint status -->
+
+🤖 Generated with [Claude Code](https://claude.ai/claude-code)
+SKELETON
+)"
+else
+  PR_BODY="$(cat)
+🤖 Generated with [Claude Code](https://claude.ai/claude-code)"
+fi
 
 echo "==> Creating PR: '$TITLE' ($BRANCH → $BASE)"
 
@@ -24,20 +72,7 @@ PR_URL=$(gh pr create \
   --head "$BRANCH" \
   --base "$BASE" \
   --title "$TITLE" \
-  --body "$(cat <<'EOF'
-## Summary
-
-<!-- Added by Claude Code -->
-
-## Test plan
-
-- [ ] All tests passing (`uv run pytest`)
-- [ ] Coverage ≥ 80%
-- [ ] Ruff passes (`uv run ruff check src/`)
-
-🤖 Generated with [Claude Code](https://claude.ai/claude-code)
-EOF
-)")
+  --body "$PR_BODY")
 
 PR_NUMBER=$(echo "$PR_URL" | grep -oP '(?<=/pull/)\d+')
 

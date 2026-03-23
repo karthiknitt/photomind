@@ -23,6 +23,45 @@ the result back to OneDrive/PhotoMind/library/. ChromaDB (disk-backed) stores CL
 for semantic search. The frontend queries both SQLite (metadata) and ChromaDB (via a Python
 HTTP bridge) for hybrid search.
 
+## Shared SQLite Architecture (Critical)
+
+Both Next.js and the Python daemon write to the **same SQLite file**. Key details:
+- Next.js uses Drizzle ORM (`drizzle-orm/bun-sqlite`); SQLite is opened with WAL mode + `foreign_keys=ON`
+- Python daemon uses raw `sqlite3` with WAL mode + `foreign_keys=OFF` (FK checks disabled because `action_log` may be written before the `photos` table exists)
+- `backend/src/photomind/services/action_log.py` creates `action_log` with `CREATE TABLE IF NOT EXISTS` — it can bootstrap before Drizzle migrations have run
+- Database path is controlled by `DATABASE_PATH` env var; defaults to `~/photomind/photomind.db`
+- For tests, set `DATABASE_PATH` to a temp path — no `config.yaml` needed
+
+## config.yaml (gitignored — create manually on VPS)
+
+```yaml
+database_path: /home/karthik/photomind/photomind.db
+chroma_db_path: /home/karthik/photomind/chroma_db
+thumbnails_path: /home/karthik/photomind/thumbnails
+tmp_path: /home/karthik/photomind/tmp
+
+sources:
+  - remote: onedrive_karthik
+    scan_path: /Pictures
+    label: Karthik OneDrive
+
+output:
+  remote: onedrive_karthik
+  path: PhotoMind/library/
+
+pipeline:
+  batch_size: 10
+  max_concurrent: 1
+  meme_threshold: 0.7
+  dedup_hamming_threshold: 10
+
+daemon:
+  scan_interval_seconds: 3600
+  face_cluster_interval_seconds: 86400
+```
+
+`load_config()` in `backend/src/photomind/config.py` returns safe defaults if `config.yaml` is absent (enables tests to run in CI without secrets).
+
 ## Project Structure
 
 ```
@@ -126,6 +165,15 @@ cd backend && uv run ruff check src/ && uv run ruff format src/
 
 # DB migrations
 cd frontend && bun run db:generate && bun run db:migrate
+
+# DB studio (visual data inspector)
+cd frontend && bun run db:studio
+
+# Run a single frontend test by name pattern
+cd frontend && bun test --reporter=verbose -t "test name pattern"
+
+# Run a single backend test by name pattern
+cd backend && uv run pytest -k "test_name_pattern" -v
 ```
 
 ## VPS Access

@@ -1,25 +1,25 @@
 # PhotoMind — Project Status
 
-_Last updated: 2026-03-23 by Claude (Sprint 1.1 agent)_
+_Last updated: 2026-03-23 by Claude (Sprint 1.3 agent)_
 
 ## Current Phase & Sprint
-Phase 1 — Data Foundation / Sprint 1.2 — rclone + EXIF + thumbnail + action_log (parallel) ← NEXT
+Phase 1 — Data Foundation / Sprint 1.3 COMPLETE → Phase 2 Sprint 2.1 next
 
 ## Overall Progress
 - [x] Phase 0 — Bootstrap ← COMPLETE
-- [~] Phase 1 — Data Foundation ← in progress (Sprint 1.1 done, PR open)
+- [~] Phase 1 — Data Foundation ← in progress (Sprints 1.1–1.3 done, PRs open)
 - [ ] Phase 2 — AI Intelligence
 - [ ] Phase 3 — Faces + API + UI
 - [ ] Phase 4 — Full UI + Deploy
 
 ## Phase 1 Task Status
-- [x] T1.1 — DB Schema: Drizzle migrations generated, 24 integration tests, all passing (PR #1 open)
-- [ ] T1.2 — rclone service (feat/rclone-service)
-- [ ] T1.2 — EXIF service (feat/exif-service)
-- [ ] T1.2 — Thumbnail service (feat/thumbnail-service)
-- [ ] T1.2 — Action log helper (feat/action-log)
-- [ ] T1.3 — Dedup service
-- [ ] T1.3 — Meme detector
+- [x] T1.1 — DB Schema: Drizzle migrations, 24 integration tests (PR #1 merged)
+- [x] T1.2 — rclone service (PR #2 merged)
+- [x] T1.2 — EXIF service (PR #5 merged)
+- [x] T1.2 — Thumbnail service (PR #3 merged)
+- [x] T1.2 — Action log helper (PR #4 merged)
+- [~] T1.3 — Dedup service: 22 tests, 100% coverage (PR #6 open, awaiting review)
+- [~] T1.3 — Meme detector: 30 tests, 97% coverage (PR #7 open, awaiting review)
 
 ## Phase 0 Task Status
 - [x] T0.1 — GitHub repo created (`karthiknitt/photomind`, private)
@@ -38,14 +38,20 @@ Phase 1 — Data Foundation / Sprint 1.2 — rclone + EXIF + thumbnail + action_
 | Branch | Task | Status | PR # |
 |---|---|---|---|
 | main | Phase 0 complete | merged | direct push |
-| feat/db-schema | T1.1 DB Schema | PR open | #1 |
+| feat/db-schema | T1.1 DB Schema | merged | #1 |
+| feat/rclone-service | T1.2 rclone | merged | #2 |
+| feat/thumbnail-service | T1.2 thumbnail | merged | #3 |
+| feat/action-log | T1.2 action log | merged | #4 |
+| feat/exif-service | T1.2 EXIF | merged | #5 |
+| feat/dedup-service | T1.3 dedup | PR open | #6 |
+| feat/meme-detector | T1.3 meme | PR open | #7 |
 
 ## Completed This Session
-- Sprint 1.1: DB Schema integration tests + Drizzle migrations
-- 24 new integration tests across all 7 tables (insert/select/update/FK constraints)
-- Migration file: `frontend/drizzle/0000_same_garia.sql` (7 tables, all FKs)
-- TDD cycle: RED (no migration files) → GREEN (28/28 tests passing)
-- Biome lint + import sort clean
+- Sprint 1.3: Dedup service + Meme detector (both TDD, 52 new tests)
+- dedup.py: compute_phash, compute_sha256, hamming_distance, is_duplicate
+- meme.py: 5-signal classifier (whatsapp, clip, aspect ratio, no-date, file-size)
+- imagehash added as dependency (pHash via ViT-aligned 64-bit hash)
+- All 156 backend tests passing, 92% coverage
 
 ## Blocked / Needs Attention
 - Branch protection skipped (GitHub free plan limitation for private repos).
@@ -61,7 +67,7 @@ Phase 1 — Data Foundation / Sprint 1.2 — rclone + EXIF + thumbnail + action_
 | Suite | Passing | Failing | Coverage |
 |---|---|---|---|
 | frontend (bun test) | 28 | 0 | — |
-| backend (pytest) | 10 | 0 | 81% |
+| backend (pytest) | 156 | 0 | 92% |
 
 ## Environment Notes
 - VPS: configure SSH + Tailscale IP in `config.yaml` (gitignored)
@@ -83,10 +89,8 @@ cd backend && uv run pytest
 ```
 
 ## Next Session Should
-1. Merge PR #1 (feat/db-schema) after CI passes
-2. Sprint 1.2: Start 4 parallel Python backend services in separate worktrees:
-   - feat/rclone-service: rclone wrapper (list, download, upload)
-   - feat/exif-service: ExifTool/Pillow EXIF extraction
-   - feat/thumbnail-service: Pillow 400px JPEG thumbnail generation
-   - feat/action-log: SQLite action_log write helper for Python daemon
-3. Each worktree: TDD (test: commit first), then feat: commit
+1. Merge PRs #6 (dedup) and #7 (meme) after CI + CodeRabbit review
+2. Sprint 2.1: Start 2 parallel Phase 2 services:
+   - feat/clip-service: open_clip ViT-B/32 float16 embeddings + ChromaDB insert
+   - feat/geo-service: reverse_geocoder offline GPS→city/state/country
+3. Each in its own worktree, TDD cycle
