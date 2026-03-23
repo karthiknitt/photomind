@@ -599,3 +599,61 @@ class TestPngSupport:
         assert result.height == 200
         assert result.date_taken is None
         assert result.gps_lat is None
+
+
+# ---------------------------------------------------------------------------
+# Test 11: GPS (num, den) tuple rationals — fix for CodeRabbit Major finding
+# ---------------------------------------------------------------------------
+
+
+class TestGpsTupleRationals:
+    def test_dms_to_decimal_handles_tuple_rational_north(self) -> None:
+        """_dms_to_decimal must handle (num, den) tuples, not raise TypeError.
+
+        Some Pillow builds / piexif paths return raw (numerator, denominator)
+        tuples instead of IFDRational objects. float((37, 1)) raises TypeError,
+        causing _parse_gps to silently drop valid GPS coordinates.
+        """
+        from photomind.services.exif import _dms_to_decimal
+
+        dms = ((37, 1), (46, 1), (2988, 100))  # 37°46'29.88" N → ~37.7749833
+        result = _dms_to_decimal(dms, "N")
+
+        assert abs(result - 37.7749833) < 0.001
+
+    def test_dms_to_decimal_handles_tuple_rational_south_is_negative(self) -> None:
+        from photomind.services.exif import _dms_to_decimal
+
+        dms = ((33, 1), (52, 1), (0, 1))  # 33°52'0" S → ~-33.8667
+        result = _dms_to_decimal(dms, "S")
+
+        assert result < 0
+        assert abs(result - (-33.8667)) < 0.001
+
+
+# ---------------------------------------------------------------------------
+# Test 12: TOCTOU — FileNotFoundError from Image.open must not become ValueError
+# ---------------------------------------------------------------------------
+
+
+class TestTocTouFileNotFound:
+    def test_image_open_file_not_found_propagates_not_wrapped(
+        self, tmp_path: Path
+    ) -> None:
+        """FileNotFoundError from Image.open must propagate, not become ValueError.
+
+        Covers the TOCTOU race: file passes path.exists() but is removed before
+        Image.open() executes. The broad except-Exception handler was wrapping
+        FileNotFoundError as ValueError, breaking the documented contract.
+        """
+        from unittest.mock import patch
+
+        jpeg_path = tmp_path / "disappearing.jpg"
+        jpeg_path.write_bytes(_build_jpeg_no_exif())
+
+        with patch(
+            "photomind.services.exif.Image.open",
+            side_effect=FileNotFoundError("file vanished"),
+        ):
+            with pytest.raises(FileNotFoundError):
+                extract_exif(jpeg_path)

@@ -60,6 +60,17 @@ class ExifData:
     height: int
 
 
+def _rational_to_float(v: Any) -> float:  # noqa: ANN401
+    """Convert an EXIF rational to float.
+
+    Handles IFDRational objects, plain numbers, and raw (numerator, denominator)
+    tuples as returned by some Pillow builds and piexif.
+    """
+    if isinstance(v, tuple):
+        return v[0] / v[1]
+    return float(v)
+
+
 def _dms_to_decimal(dms: tuple[Any, Any, Any], ref: str) -> float:
     """
     Convert EXIF GPS DMS (degrees, minutes, seconds) rationals to decimal degrees.
@@ -72,9 +83,9 @@ def _dms_to_decimal(dms: tuple[Any, Any, Any], ref: str) -> float:
     Returns:
         Decimal degrees. Negative for S or W hemispheres.
     """
-    d = float(dms[0])
-    m = float(dms[1])
-    s = float(dms[2])
+    d = _rational_to_float(dms[0])
+    m = _rational_to_float(dms[1])
+    s = _rational_to_float(dms[2])
     decimal = d + m / 60.0 + s / 3600.0
     if ref in ("S", "W"):
         decimal = -decimal
@@ -171,12 +182,16 @@ def extract_exif(file_path: str | Path) -> ExifData:
     try:
         img = Image.open(path)
         img.verify()  # validate file integrity without loading full pixel data
+    except FileNotFoundError:
+        raise
     except (UnidentifiedImageError, Exception) as exc:
         raise ValueError(f"Cannot open {path} as an image: {exc}") from exc
 
     # Re-open after verify() — Pillow requires reopening after verify
     try:
         img = Image.open(path)
+    except FileNotFoundError:
+        raise
     except Exception as exc:
         raise ValueError(f"Cannot open {path} as an image: {exc}") from exc
 
