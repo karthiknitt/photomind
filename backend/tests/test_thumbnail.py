@@ -21,7 +21,7 @@ def make_image(width: int, height: int, mode: str = "RGB") -> Image.Image:
 
 
 def save_image(img: Image.Image, path: Path) -> Path:
-    """Save image to path, converting to RGB first if necessary for JPEG."""
+    """Save image to path. RGBA/P modes are saved as PNG; others saved as JPEG."""
     if img.mode in ("RGBA", "P"):
         img.save(str(path), "PNG")  # save RGBA/P as PNG for the source
     else:
@@ -183,3 +183,60 @@ def test_output_is_valid_jpeg(tmp_path):
     result = generate_thumbnail(src, tmp_path / "thumbs", PHOTO_ID)
     with Image.open(result) as thumb:
         assert thumb.format == "JPEG"
+
+
+# ---------------------------------------------------------------------------
+# Fix 1: IOError/PermissionError must not be swallowed as ValueError
+# ---------------------------------------------------------------------------
+
+
+def test_permission_error_propagates_not_wrapped(tmp_path):
+    """PermissionError from Image.open must propagate, not become ValueError.
+
+    The broad except-Exception block was converting OS-level errors
+    (PermissionError, IOError) into ValueError, hiding the real cause.
+    """
+    from unittest.mock import patch
+
+    src = save_image(make_image(100, 100), tmp_path / "photo.jpg")
+
+    with patch(
+        "photomind.services.thumbnail.Image.open",
+        side_effect=PermissionError("access denied"),
+    ):
+        with pytest.raises(PermissionError):
+            generate_thumbnail(src, tmp_path / "thumbs", PHOTO_ID)
+
+
+# ---------------------------------------------------------------------------
+# Fix 2: photo_id path traversal validation
+# ---------------------------------------------------------------------------
+
+
+def test_path_traversal_photo_id_raises_value_error(tmp_path):
+    """photo_id with path separators or '..' must raise ValueError."""
+    src = save_image(make_image(100, 100), tmp_path / "photo.jpg")
+
+    for bad_id in ["../../secrets", "../etc", "has/slash", "/absolute"]:
+        with pytest.raises(ValueError, match="Invalid photo_id"):
+            generate_thumbnail(src, tmp_path / "thumbs", bad_id)
+
+
+def test_thumbnail_path_traversal_raises_value_error(tmp_path):
+    """thumbnail_path with invalid photo_id must also raise ValueError."""
+    for bad_id in ["../../secrets", "has/slash"]:
+        with pytest.raises(ValueError, match="Invalid photo_id"):
+            thumbnail_path(tmp_path / "thumbs", bad_id)
+
+
+def test_valid_photo_ids_accepted(tmp_path):
+    """Alphanumeric, hyphen, and underscore photo_ids must be accepted."""
+    src = save_image(make_image(100, 100), tmp_path / "photo.jpg")
+
+    for valid_id in [
+        "abc123",
+        "550e8400-e29b-41d4-a716-446655440000",
+        "id_with_underscore",
+    ]:
+        result = generate_thumbnail(src, tmp_path / "thumbs", valid_id)
+        assert result.exists()

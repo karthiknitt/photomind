@@ -9,6 +9,7 @@ RGBA and palette-mode images are converted to RGB before saving as JPEG.
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 
 from PIL import Image, UnidentifiedImageError
@@ -17,6 +18,15 @@ logger = logging.getLogger(__name__)
 
 THUMBNAIL_SIZE = 400  # longest side in pixels
 THUMBNAIL_QUALITY = 85  # JPEG quality
+
+# photo_id must contain only safe characters — no path separators or traversal
+_SAFE_PHOTO_ID = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def _validate_photo_id(photo_id: str) -> None:
+    """Raise ValueError if photo_id contains unsafe characters."""
+    if not _SAFE_PHOTO_ID.match(photo_id):
+        raise ValueError(f"Invalid photo_id {photo_id!r}: must match [A-Za-z0-9_-]+")
 
 
 def generate_thumbnail(
@@ -44,6 +54,8 @@ def generate_thumbnail(
         FileNotFoundError: if src_path does not exist
         ValueError: if the file cannot be opened as an image
     """
+    _validate_photo_id(photo_id)
+
     src_path = Path(src_path)
     dest_dir = Path(dest_dir)
 
@@ -55,8 +67,6 @@ def generate_thumbnail(
         img.load()  # force decode so corrupt files are caught here
     except UnidentifiedImageError as exc:
         raise ValueError(f"Cannot open {src_path} as an image: {exc}") from exc
-    except Exception as exc:
-        raise ValueError(f"Failed to open image {src_path}: {exc}") from exc
 
     # thumbnail() modifies in-place and never upscales — perfect behaviour
     img.thumbnail((THUMBNAIL_SIZE, THUMBNAIL_SIZE), Image.LANCZOS)
@@ -79,4 +89,5 @@ def generate_thumbnail(
 
 def thumbnail_path(dest_dir: str | Path, photo_id: str) -> Path:
     """Return the expected thumbnail path without generating it."""
+    _validate_photo_id(photo_id)
     return Path(dest_dir) / f"{photo_id}.jpg"
