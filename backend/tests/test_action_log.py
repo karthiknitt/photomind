@@ -13,7 +13,6 @@ import pytest
 
 from photomind.services.action_log import ActionType, get_recent_actions, log_action
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -157,7 +156,8 @@ class TestLogActionDDL:
 
         with connect(db_path) as conn:
             tables = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='action_log'"
+                "SELECT name FROM sqlite_master "
+                "WHERE type='table' AND name='action_log'"
             ).fetchall()
         assert len(tables) == 1
 
