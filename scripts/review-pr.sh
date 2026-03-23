@@ -129,8 +129,8 @@ cmd_merge() {
     exit 1
   fi
 
-  gh pr merge "$PR" --repo "$REPO" --squash --delete-branch
-  echo "==> PR #$PR merged and branch deleted."
+  gh pr merge "$PR" --repo "$REPO" --squash
+  echo "==> PR #$PR merged (branch preserved)."
 }
 
 # ---------------------------------------------------------------------------
