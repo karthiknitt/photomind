@@ -1,16 +1,25 @@
 # PhotoMind — Project Status
 
-_Last updated: 2026-03-18 by Claude (Phase 0 bootstrap agent)_
+_Last updated: 2026-03-23 by Claude (Sprint 1.1 agent)_
 
 ## Current Phase & Sprint
-Phase 1 — Data Foundation / Sprint 1.1 — Database Schema ← starting next
+Phase 1 — Data Foundation / Sprint 1.2 — rclone + EXIF + thumbnail + action_log (parallel) ← NEXT
 
 ## Overall Progress
 - [x] Phase 0 — Bootstrap ← COMPLETE
-- [~] Phase 1 — Data Foundation ← starting
+- [~] Phase 1 — Data Foundation ← in progress (Sprint 1.1 done, PR open)
 - [ ] Phase 2 — AI Intelligence
 - [ ] Phase 3 — Faces + API + UI
 - [ ] Phase 4 — Full UI + Deploy
+
+## Phase 1 Task Status
+- [x] T1.1 — DB Schema: Drizzle migrations generated, 24 integration tests, all passing (PR #1 open)
+- [ ] T1.2 — rclone service (feat/rclone-service)
+- [ ] T1.2 — EXIF service (feat/exif-service)
+- [ ] T1.2 — Thumbnail service (feat/thumbnail-service)
+- [ ] T1.2 — Action log helper (feat/action-log)
+- [ ] T1.3 — Dedup service
+- [ ] T1.3 — Meme detector
 
 ## Phase 0 Task Status
 - [x] T0.1 — GitHub repo created (`karthiknitt/photomind`, private)
@@ -29,13 +38,14 @@ Phase 1 — Data Foundation / Sprint 1.1 — Database Schema ← starting next
 | Branch | Task | Status | PR # |
 |---|---|---|---|
 | main | Phase 0 complete | merged | direct push |
+| feat/db-schema | T1.1 DB Schema | PR open | #1 |
 
 ## Completed This Session
-- Full Phase 0 bootstrap
-- 2 commits on main (7ac6fb3, 0bd01e8)
-- CI pipeline live at https://github.com/karthiknitt/photomind/actions
-- Frontend: 4 tests passing (schema smoke tests)
-- Backend: 10 tests passing, 81% coverage (config module)
+- Sprint 1.1: DB Schema integration tests + Drizzle migrations
+- 24 new integration tests across all 7 tables (insert/select/update/FK constraints)
+- Migration file: `frontend/drizzle/0000_same_garia.sql` (7 tables, all FKs)
+- TDD cycle: RED (no migration files) → GREEN (28/28 tests passing)
+- Biome lint + import sort clean
 
 ## Blocked / Needs Attention
 - Branch protection skipped (GitHub free plan limitation for private repos).
@@ -50,7 +60,7 @@ Phase 1 — Data Foundation / Sprint 1.1 — Database Schema ← starting next
 ## Test Status
 | Suite | Passing | Failing | Coverage |
 |---|---|---|---|
-| frontend (bun test) | 4 | 0 | — |
+| frontend (bun test) | 28 | 0 | — |
 | backend (pytest) | 10 | 0 | 81% |
 
 ## Environment Notes
@@ -73,8 +83,10 @@ cd backend && uv run pytest
 ```
 
 ## Next Session Should
-1. Create `feat/db-schema` branch (T1.1)
-2. Write failing Drizzle schema tests first (TDD — test:)
-3. Run `bun run db:generate && bun run db:migrate` to verify migration works
-4. Write insert/select/update tests for each table
-5. Open PR #1 with schema work
+1. Merge PR #1 (feat/db-schema) after CI passes
+2. Sprint 1.2: Start 4 parallel Python backend services in separate worktrees:
+   - feat/rclone-service: rclone wrapper (list, download, upload)
+   - feat/exif-service: ExifTool/Pillow EXIF extraction
+   - feat/thumbnail-service: Pillow 400px JPEG thumbnail generation
+   - feat/action-log: SQLite action_log write helper for Python daemon
+3. Each worktree: TDD (test: commit first), then feat: commit

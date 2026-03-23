@@ -35,8 +35,7 @@ frontend/dist/
 bun.lockb
 *.bun
 
-# Drizzle
-frontend/drizzle/meta/
+# Drizzle (migration SQL and meta are versioned — do not ignore)
 
 # OS
 .DS_Store
