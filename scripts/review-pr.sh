@@ -110,9 +110,18 @@ cmd_merge() {
   branch=$(gh pr view "$PR" --repo "$REPO" --json headRefName --jq '.headRefName')
   echo "    Branch: $branch"
 
-  # Check for conflicts
+  # Check for conflicts (retry once if GitHub hasn't computed status yet)
   local mergeable
   mergeable=$(gh pr view "$PR" --repo "$REPO" --json mergeable --jq '.mergeable')
+  if [[ "$mergeable" == "UNKNOWN" ]]; then
+    echo "==> Merge status unknown, waiting for GitHub to compute..."
+    sleep 5
+    mergeable=$(gh pr view "$PR" --repo "$REPO" --json mergeable --jq '.mergeable')
+    if [[ "$mergeable" == "UNKNOWN" ]]; then
+      echo "ERROR: PR #$PR merge status is still UNKNOWN. Try again shortly." >&2
+      exit 1
+    fi
+  fi
   if [[ "$mergeable" == "CONFLICTING" ]]; then
     echo "ERROR: PR #$PR has merge conflicts. Resolve them first." >&2
     echo "  Hint: git fetch origin main && git merge origin/main --no-edit" >&2
