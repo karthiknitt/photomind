@@ -81,6 +81,12 @@ def test_phash_raises_file_not_found(tmp_path: Path) -> None:
         compute_phash(tmp_path / "missing.jpg")
 
 
+def test_phash_raises_for_directory(tmp_path: Path) -> None:
+    """Passing a directory should raise ValueError, not crash with a cryptic OSError."""
+    with pytest.raises((ValueError, IsADirectoryError)):
+        compute_phash(tmp_path)  # tmp_path is a directory
+
+
 def test_phash_raises_value_error_for_non_image(tmp_path: Path) -> None:
     bad = tmp_path / "notanimage.jpg"
     bad.write_bytes(b"this is not image data")
@@ -126,6 +132,12 @@ def test_sha256_differs_for_different_files(tmp_path: Path) -> None:
 def test_sha256_raises_file_not_found(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         compute_sha256(tmp_path / "missing.jpg")
+
+
+def test_sha256_raises_for_directory(tmp_path: Path) -> None:
+    """Passing a directory should raise IsADirectoryError, not silently read 0 bytes."""
+    with pytest.raises((IsADirectoryError, ValueError)):
+        compute_sha256(tmp_path)
 
 
 def test_sha256_accepts_str_path(tmp_path: Path) -> None:
@@ -220,15 +232,21 @@ def test_is_duplicate_respects_custom_threshold(tmp_path: Path) -> None:
     assert is_dup_high is True
 
 
-def test_is_duplicate_default_threshold_is_10(tmp_path: Path) -> None:
-    """Hashes 10 bits apart should be duplicates with default threshold."""
-    # craft two hashes exactly 10 bits apart
-    # "0000000000000000" flipped 10 bits → "00000000000003ff" (last 10 bits set)
+def test_is_duplicate_default_threshold_is_10() -> None:
+    """Hashes exactly 10 bits apart are duplicates under the default threshold."""
     h_base = "0000000000000000"
-    # flip lowest 10 bits: 0b1111111111 = 0x3ff
-    h_near = "000000000000003f"  # 6 bits set — within threshold=10
+    # 0x03ff = 0b0000001111111111 — exactly 10 bits set → distance = 10
+    h_near = "00000000000003ff"
     is_dup, _ = is_duplicate(h_base, [h_near])
     assert is_dup is True
+
+
+def test_is_duplicate_invalid_threshold_raises() -> None:
+    """hamming_threshold outside [0, 64] must raise ValueError."""
+    with pytest.raises(ValueError):
+        is_duplicate("0000000000000000", [], hamming_threshold=65)
+    with pytest.raises(ValueError):
+        is_duplicate("0000000000000000", [], hamming_threshold=-1)
 
 
 def test_is_duplicate_above_threshold_returns_false() -> None:

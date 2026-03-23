@@ -44,6 +44,8 @@ def compute_phash(image_path: str | Path) -> str:
     path = Path(image_path)
     if not path.exists():
         raise FileNotFoundError(f"Image not found: {path}")
+    if not path.is_file():
+        raise IsADirectoryError(f"Expected a file, got a directory: {path}")
 
     try:
         with Image.open(path) as img:
@@ -70,6 +72,8 @@ def compute_sha256(file_path: str | Path) -> str:
     path = Path(file_path)
     if not path.exists():
         raise FileNotFoundError(f"File not found: {path}")
+    if not path.is_file():
+        raise IsADirectoryError(f"Expected a file, got a directory: {path}")
 
     digest = hashlib.sha256()
     with open(path, "rb") as f:
@@ -108,18 +112,27 @@ def is_duplicate(
         phash: pHash of the candidate photo (hex string).
         known_phashes: iterable of pHash strings already in the library.
         hamming_threshold: maximum Hamming distance to count as duplicate
-            (default 10 ≈ 84% bit similarity out of 64 bits).
+            (default 10 ≈ 84% bit similarity out of 64 bits). Must be in [0, 64].
 
     Returns:
         ``(True, matching_phash)`` if a duplicate is found,
         ``(False, None)`` otherwise.
+
+    Raises:
+        ValueError: if *hamming_threshold* is outside [0, 64].
     """
+    if not 0 <= hamming_threshold <= 64:
+        raise ValueError(
+            f"hamming_threshold must be in [0, 64], got {hamming_threshold}"
+        )
     candidate = imagehash.hex_to_hash(phash)
     for known in known_phashes:
-        if (candidate - imagehash.hex_to_hash(known)) <= hamming_threshold:
+        known_hash = imagehash.hex_to_hash(known)
+        dist = candidate - known_hash
+        if dist <= hamming_threshold:
             logger.debug(
                 "Duplicate detected: distance=%d, threshold=%d",
-                candidate - imagehash.hex_to_hash(known),
+                dist,
                 hamming_threshold,
             )
             return True, known
