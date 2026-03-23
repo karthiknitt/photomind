@@ -354,3 +354,60 @@ class TestGetRecentActions:
         assert row["action"] == "SKIPPED_MEME"
         assert row["detail"] == '{"score": 0.9}'
         assert row["timestamp"] == ts
+
+
+# ---------------------------------------------------------------------------
+# Fix 1: negative limit must raise ValueError (SQLite treats -N as no limit)
+# ---------------------------------------------------------------------------
+
+
+class TestNegativeLimit:
+    def test_negative_limit_raises_value_error(self, tmp_path):
+        """get_recent_actions must raise ValueError for negative limit.
+
+        SQLite treats a negative LIMIT as 'no upper bound', which defeats
+        the intended cap and can return unexpectedly large result sets.
+        """
+        db_path = make_db(tmp_path)
+        with pytest.raises(ValueError, match="limit"):
+            get_recent_actions(db_path, limit=-1)
+
+    def test_zero_limit_is_accepted(self, tmp_path):
+        """limit=0 is valid — returns an empty list, not an error."""
+        db_path = make_db(tmp_path)
+        log_action(db_path, ActionType.COPIED)
+        result = get_recent_actions(db_path, limit=0)
+        assert result == []
+
+    def test_positive_limit_still_works(self, tmp_path):
+        """Positive limit continues to work after the guard is added."""
+        db_path = make_db(tmp_path)
+        for _ in range(5):
+            log_action(db_path, ActionType.COPIED)
+        result = get_recent_actions(db_path, limit=3)
+        assert len(result) == 3
+
+
+# ---------------------------------------------------------------------------
+# Fix 2: same-second rows should return in stable (rowid DESC) order
+# ---------------------------------------------------------------------------
+
+
+class TestSameTimestampOrdering:
+    def test_same_timestamp_rows_return_newest_rowid_first(self, tmp_path):
+        """Rows with identical timestamps must be ordered by rowid DESC.
+
+        Without a tie-breaker, SQLite returns same-timestamp rows in an
+        implementation-defined (non-deterministic) order.
+        """
+        db_path = make_db(tmp_path)
+        ts = 1_700_000_000
+        id1 = log_action(db_path, ActionType.COPIED, timestamp=ts)
+        id2 = log_action(db_path, ActionType.INDEXED, timestamp=ts)
+        id3 = log_action(db_path, ActionType.FACE_DETECTED, timestamp=ts)
+
+        rows = get_recent_actions(db_path)
+        ids_returned = [r["id"] for r in rows]
+
+        # Inserted last → highest rowid → must appear first
+        assert ids_returned == [id3, id2, id1]

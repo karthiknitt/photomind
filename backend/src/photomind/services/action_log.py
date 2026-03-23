@@ -50,7 +50,7 @@ VALUES (?, ?, ?, ?, ?)
 _SELECT_ALL_SQL = """
 SELECT id, photo_id, action, detail, timestamp
 FROM action_log
-ORDER BY timestamp DESC
+ORDER BY timestamp DESC, rowid DESC
 LIMIT ?
 """
 
@@ -58,7 +58,7 @@ _SELECT_BY_PHOTO_SQL = """
 SELECT id, photo_id, action, detail, timestamp
 FROM action_log
 WHERE photo_id = ?
-ORDER BY timestamp DESC
+ORDER BY timestamp DESC, rowid DESC
 LIMIT ?
 """
 
@@ -145,7 +145,13 @@ def get_recent_actions(
 
     Returns:
         List of dicts with keys: id, photo_id, action, detail, timestamp.
+
+    Raises:
+        ValueError: if limit is negative.
     """
+    if limit < 0:
+        raise ValueError(f"limit must be >= 0, got {limit}")
+
     with _open(db_path) as conn:
         _ensure_table(conn)
         conn.row_factory = sqlite3.Row
