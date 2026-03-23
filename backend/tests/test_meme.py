@@ -194,7 +194,7 @@ def test_low_signal_with_medium_signal_is_meme() -> None:
 
 def test_small_file_small_image_does_not_fire_low_signal() -> None:
     """Longest side ≤ 500 px: low signal does not fire (thumbnail/icon)."""
-    # 2 medium signals but small image — low signal should NOT add to count
+    # 1 medium signal (no-date); small image — low signal should NOT fire
     result = _meme(file_size=50_000, width=300, height=400, has_exif_date=False)
     # Only 1 medium signal (no-date); low signal suppressed → not meme
     assert result.is_meme is False
@@ -204,7 +204,7 @@ def test_file_exactly_150kb_does_not_fire_low_signal() -> None:
     """File size must be strictly less than 150 KB to fire the low signal.
 
     Use 4:3 (non-meme) dimensions and has_exif_date=True so no other
-    signal fires — confirming file_size=150_000 is below the threshold.
+    signal fires — confirming file_size=150_000 at the threshold does not fire.
     """
     result = _meme(file_size=150_000, width=1600, height=1200)
     # no other signal fires; low signal does not fire at exactly 150 KB
