@@ -10,10 +10,7 @@ TDD: these tests are written BEFORE the implementation.
 from __future__ import annotations
 
 import io
-import struct
-import time
-from calendar import timegm
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import piexif
@@ -21,7 +18,6 @@ import pytest
 from PIL import Image
 
 from photomind.services.exif import ExifData, extract_exif
-
 
 # ---------------------------------------------------------------------------
 # Helpers for building synthetic EXIF blobs
@@ -273,7 +269,7 @@ class TestNoExif:
 class TestGpsConversion:
     def test_gps_north_east(self, tmp_path: Path) -> None:
         """37°46'29.88" N, 122°25'11.88" E — positive lat, positive lon."""
-        lat_dms = _dms_rationals(37, 46, 2988, 100)   # 37 + 46/60 + 29.88/3600
+        lat_dms = _dms_rationals(37, 46, 2988, 100)  # 37 + 46/60 + 29.88/3600
         lon_dms = _dms_rationals(122, 25, 1188, 100)  # 122 + 25/60 + 11.88/3600
 
         jpeg_bytes = _build_jpeg_with_full_exif(
@@ -350,7 +346,7 @@ class TestDateConversion:
         result = extract_exif(jpeg_path)
 
         # Build expected timestamp in UTC
-        expected_dt = datetime(2024, 12, 25, 14, 30, 22, tzinfo=timezone.utc)
+        expected_dt = datetime(2024, 12, 25, 14, 30, 22, tzinfo=UTC)
         expected_ts = int(expected_dt.timestamp())
 
         assert result.date_taken == expected_ts
@@ -363,7 +359,7 @@ class TestDateConversion:
 
         result = extract_exif(jpeg_path)
 
-        expected_dt = datetime(2000, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        expected_dt = datetime(2000, 1, 1, 0, 0, 0, tzinfo=UTC)
         expected_ts = int(expected_dt.timestamp())
 
         assert result.date_taken == expected_ts
