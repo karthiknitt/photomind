@@ -130,7 +130,7 @@ cmd_merge() {
 cmd_sync() {
   echo "==> Syncing local main with origin..."
   git checkout main
-  git pull origin main
+  git pull origin main --rebase
   echo "==> Local main is up to date."
 }
 
