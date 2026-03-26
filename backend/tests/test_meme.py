@@ -94,7 +94,9 @@ def test_whatsapp_software_case_insensitive_is_medium_signal() -> None:
     for variant in ("WHATSAPP", "whatsapp", "WhatsApp", "WhatSApp 2.24.1"):
         result = _meme(software=variant)
         # MEDIUM signal alone — not a meme
-        assert result.is_meme is False, f"WhatsApp software alone should not be meme: {variant!r}"
+        assert result.is_meme is False, (
+            f"WhatsApp software alone should not be meme: {variant!r}"
+        )
 
 
 def test_whatsapp_software_plus_no_date_is_meme() -> None:
@@ -164,7 +166,11 @@ def test_wa_filename_plus_software_is_meme() -> None:
 
 def test_wa_filename_plus_aspect_ratio_is_meme() -> None:
     """WA filename (MEDIUM) + 9:16 ratio (MEDIUM) = 2 signals → meme."""
-    result = _meme(filename="WhatsApp Image 2024-01-01 at 10.00.00.jpeg", width=1080, height=1920)
+    result = _meme(
+        filename="WhatsApp Image 2024-01-01 at 10.00.00.jpeg",
+        width=1080,
+        height=1920,
+    )
     assert result.is_meme is True
 
 
@@ -172,7 +178,9 @@ def test_normal_filename_does_not_fire_wa_signal() -> None:
     """Regular camera filenames (IMG_001.jpg, DSC_001.jpg) are not WA patterns."""
     for fname in ("IMG_001.jpg", "DSC_0042.JPG", "DCIM_2024.jpg", "photo.jpeg"):
         result = _meme(filename=fname)
-        assert result.is_meme is False, f"Normal filename should not fire WA signal: {fname!r}"
+        assert result.is_meme is False, (
+            f"Normal filename should not fire WA signal: {fname!r}"
+        )
 
 
 def test_filename_none_does_not_fire_wa_signal() -> None:
@@ -182,7 +190,10 @@ def test_filename_none_does_not_fire_wa_signal() -> None:
 
 def test_full_path_filename_is_also_matched() -> None:
     """The function should match the basename even when a full path is passed."""
-    result = _meme(filename="/Pictures/WhatsApp/IMG-20240101-WA0001.jpg", has_exif_date=False)
+    result = _meme(
+        filename="/Pictures/WhatsApp/IMG-20240101-WA0001.jpg",
+        has_exif_date=False,
+    )
     assert result.is_meme is True
 
 

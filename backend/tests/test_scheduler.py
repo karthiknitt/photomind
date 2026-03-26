@@ -13,7 +13,7 @@ I/O or waiting occurs.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -27,7 +27,10 @@ SLEEP_PATCH = "photomind.worker.scheduler.time.sleep"
 @pytest.fixture()
 def config() -> PhotoMindConfig:
     return PhotoMindConfig(
-        daemon=DaemonConfig(scan_interval_seconds=3600, face_cluster_interval_seconds=86400)
+        daemon=DaemonConfig(
+            scan_interval_seconds=3600,
+            face_cluster_interval_seconds=86400,
+        )
     )
 
 

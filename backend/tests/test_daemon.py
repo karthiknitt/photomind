@@ -18,13 +18,15 @@ Tests verify:
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from photomind.config import PhotoMindConfig, PipelineConfig, SourceConfig
-from photomind.worker.daemon import run_scan, _is_image
+from photomind.services.photos_db import PhotoRecord, create_photo
+from photomind.worker.daemon import _is_image, run_scan
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -230,10 +232,6 @@ class TestRunScanSkipsKnown:
         chroma_mock: MagicMock,
     ) -> None:
         """A file that already has a DB row must not be reprocessed."""
-        # Seed the DB with one known path
-        from photomind.services.photos_db import PhotoRecord, create_photo
-        import time
-
         now = int(time.time())
         create_photo(
             db_path,
@@ -265,9 +263,6 @@ class TestRunScanSkipsKnown:
         chroma_mock: MagicMock,
     ) -> None:
         """Only the new file is processed; the known file is skipped."""
-        from photomind.services.photos_db import PhotoRecord, create_photo
-        import time
-
         now = int(time.time())
         create_photo(
             db_path,

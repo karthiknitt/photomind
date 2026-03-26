@@ -59,7 +59,9 @@ def main(argv: list[str] | None = None) -> None:
     config = load_config(args.config)
 
     if args.scan_once:
-        logging.getLogger(__name__).info("--scan-once mode: running one scan then exiting")
+        logging.getLogger(__name__).info(
+            "--scan-once mode: running one scan then exiting"
+        )
         run_scan(config)
     else:
         run_forever(config)

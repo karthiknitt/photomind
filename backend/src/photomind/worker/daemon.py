@@ -34,9 +34,10 @@ from photomind.worker.pipeline import process_photo
 logger = logging.getLogger(__name__)
 
 # Supported image extensions (lowercase) — videos and documents are excluded
-_IMAGE_EXTENSIONS: frozenset[str] = frozenset(
-    {".jpg", ".jpeg", ".png", ".heic", ".heif", ".tiff", ".tif", ".webp", ".bmp", ".gif"}
-)
+_IMAGE_EXTENSIONS: frozenset[str] = frozenset({
+    ".jpg", ".jpeg", ".png", ".heic", ".heif",
+    ".tiff", ".tif", ".webp", ".bmp", ".gif",
+})
 
 
 def _is_image(filename: str) -> bool:

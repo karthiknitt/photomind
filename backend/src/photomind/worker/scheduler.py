@@ -35,7 +35,7 @@ def run_forever(config: PhotoMindConfig) -> None:
     """
     interval = config.daemon.scan_interval_seconds
     logger.info(
-        "Scheduler started — scan interval %ds, face-cluster interval %ds (Phase 3 stub)",
+        "Scheduler started — scan interval %ds, face-cluster interval %ds",
         interval,
         config.daemon.face_cluster_interval_seconds,
     )

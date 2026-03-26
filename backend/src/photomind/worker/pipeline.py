@@ -135,7 +135,7 @@ def process_photo(
         logger.info("[%s] Stage 4: meme check", photo_id)
         meme_result = check_meme(
             software=exif.software,
-            filename=Path(source_path).name,  # original filename for WA pattern detection
+            filename=Path(source_path).name,  # original filename for WA pattern
             has_exif_date=exif.date_taken is not None,
             width=exif.width,
             height=exif.height,

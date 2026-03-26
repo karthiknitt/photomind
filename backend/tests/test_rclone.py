@@ -348,8 +348,10 @@ class TestListFilesRecursive:
     def test_recursive_returns_nested_files(self) -> None:
         """Recursive listing returns files from subdirectories."""
         deep_files = [
-            {"Path": "2024/Jan/photo.jpg", "Name": "photo.jpg", "Size": 3000000, "IsDir": False},
-            {"Path": "2024/Feb/pic.jpg", "Name": "pic.jpg", "Size": 2000000, "IsDir": False},
+            {"Path": "2024/Jan/photo.jpg", "Name": "photo.jpg",
+             "Size": 3000000, "IsDir": False},
+            {"Path": "2024/Feb/pic.jpg", "Name": "pic.jpg",
+             "Size": 2000000, "IsDir": False},
         ]
         mock_result = _make_completed_process(stdout=json.dumps(deep_files))
         with patch(_PATCH_RUN, return_value=mock_result):
