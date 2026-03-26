@@ -10,6 +10,8 @@ photomind.db-shm
 photomind.db-wal
 chroma_db/
 thumbnails/
+# Don't ignore the Next.js API route that happens to live under api/thumbnails/
+!frontend/src/app/api/thumbnails/
 tmp/
 
 # Python
