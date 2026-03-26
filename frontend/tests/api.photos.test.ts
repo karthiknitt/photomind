@@ -6,9 +6,10 @@
  * Uses vi.mock to inject an in-memory test DB instead of the real singleton.
  * Each describe block gets a fresh in-memory DB in beforeEach.
  */
-import path from "node:path";
+
 import { Database } from "bun:sqlite";
-import { and, sql } from "drizzle-orm";
+import path from "node:path";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -47,13 +48,14 @@ vi.mock("@/lib/db/client", () => ({
           return (testDb as any)[prop](...args);
         };
       },
-    },
+    }
   ),
 }));
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
-const NOW = Math.floor(Date.now() / 1000);
+// Unused at module level — kept for potential fixture use
+// const _NOW = Math.floor(Date.now() / 1000);
 
 function makePhoto(overrides: Partial<NewPhoto> = {}): NewPhoto {
   return {
@@ -92,11 +94,13 @@ describe("TestDefaultBehavior", () => {
   });
 
   it("returns 200 with photos array and pagination", async () => {
-    await testDb.insert(photos).values([
-      makePhoto({ id: crypto.randomUUID() }),
-      makePhoto({ id: crypto.randomUUID() }),
-      makePhoto({ id: crypto.randomUUID() }),
-    ]);
+    await testDb
+      .insert(photos)
+      .values([
+        makePhoto({ id: crypto.randomUUID() }),
+        makePhoto({ id: crypto.randomUUID() }),
+        makePhoto({ id: crypto.randomUUID() }),
+      ]);
 
     const res = await callGet();
     expect(res.status).toBe(200);
@@ -111,10 +115,9 @@ describe("TestDefaultBehavior", () => {
   });
 
   it("defaults to status=DONE", async () => {
-    await testDb.insert(photos).values([
-      makePhoto({ status: "DONE" }),
-      makePhoto({ status: "QUEUED" }),
-    ]);
+    await testDb
+      .insert(photos)
+      .values([makePhoto({ status: "DONE" }), makePhoto({ status: "QUEUED" })]);
 
     const res = await callGet();
     const body = await res.json();
@@ -220,10 +223,9 @@ describe("TestFiltering", () => {
   });
 
   it("filters by status", async () => {
-    await testDb.insert(photos).values([
-      makePhoto({ status: "DONE" }),
-      makePhoto({ status: "QUEUED" }),
-    ]);
+    await testDb
+      .insert(photos)
+      .values([makePhoto({ status: "DONE" }), makePhoto({ status: "QUEUED" })]);
 
     const res = await callGet({ status: "QUEUED" });
     const body = await res.json();
@@ -234,10 +236,10 @@ describe("TestFiltering", () => {
   it("filters by date range", async () => {
     const base = 1700000000;
     await testDb.insert(photos).values([
-      makePhoto({ dateTaken: base - 1000 }),   // before range
-      makePhoto({ dateTaken: base }),            // at from boundary
-      makePhoto({ dateTaken: base + 500 }),     // inside range
-      makePhoto({ dateTaken: base + 1001 }),    // after range
+      makePhoto({ dateTaken: base - 1000 }), // before range
+      makePhoto({ dateTaken: base }), // at from boundary
+      makePhoto({ dateTaken: base + 500 }), // inside range
+      makePhoto({ dateTaken: base + 1001 }), // after range
     ]);
 
     const res = await callGet({
@@ -276,11 +278,13 @@ describe("TestSorting", () => {
 
   it("sorts by dateTaken desc", async () => {
     const base = 1700000000;
-    await testDb.insert(photos).values([
-      makePhoto({ dateTaken: base + 100 }),
-      makePhoto({ dateTaken: base + 300 }),
-      makePhoto({ dateTaken: base + 200 }),
-    ]);
+    await testDb
+      .insert(photos)
+      .values([
+        makePhoto({ dateTaken: base + 100 }),
+        makePhoto({ dateTaken: base + 300 }),
+        makePhoto({ dateTaken: base + 200 }),
+      ]);
 
     const res = await callGet();
     const body = await res.json();
