@@ -32,7 +32,6 @@ type TestDb = ReturnType<typeof drizzle<typeof schema>>;
 const _cell: { current: TestDb | null } = { current: null };
 
 // Proxy forwards all drizzle method calls to the current test DB.
-// biome-ignore lint/suspicious/noExplicitAny: proxy needs any for forwarding
 const dbProxy = new Proxy({} as TestDb, {
   get(_, prop: string | symbol) {
     if (!_cell.current) {
@@ -131,7 +130,7 @@ describe("TestTextSearch", () => {
 
   it("returns text matches on city", async () => {
     const photo = makePhoto({ city: "Paris", country: "France" });
-    await _cell.current!.insert(photos).values(photo);
+    await _cell.current?.insert(photos).values(photo);
 
     const { status, body } = await callSearch({ q: "Paris" });
 
@@ -142,7 +141,7 @@ describe("TestTextSearch", () => {
 
   it("returns text matches on country", async () => {
     const photo = makePhoto({ city: "Tokyo", country: "Japan" });
-    await _cell.current!.insert(photos).values(photo);
+    await _cell.current?.insert(photos).values(photo);
 
     const { status, body } = await callSearch({ q: "Japan" });
 
@@ -153,7 +152,7 @@ describe("TestTextSearch", () => {
 
   it("returns text matches on filenameFinal", async () => {
     const photo = makePhoto({ filenameFinal: "beach_sunset_2024.jpg" });
-    await _cell.current!.insert(photos).values(photo);
+    await _cell.current?.insert(photos).values(photo);
 
     const { status, body } = await callSearch({ q: "sunset" });
 
@@ -164,7 +163,7 @@ describe("TestTextSearch", () => {
 
   it("returns empty array when no matches", async () => {
     const photo = makePhoto({ city: "Berlin", country: "Germany" });
-    await _cell.current!.insert(photos).values(photo);
+    await _cell.current?.insert(photos).values(photo);
 
     const { status, body } = await callSearch({ q: "xyznomatchwhatsoever" });
 
@@ -189,7 +188,7 @@ describe("TestSemanticSearch", () => {
   it("calls CLIP bridge URL when CLIP_BRIDGE_URL is set", async () => {
     process.env.CLIP_BRIDGE_URL = "http://localhost:8765";
     const photo = makePhoto({ id: "semantic-photo-1" });
-    await _cell.current!.insert(photos).values(photo);
+    await _cell.current?.insert(photos).values(photo);
 
     let calledUrl = "";
     const { status } = await callSearch({ q: "dogs", mode: "semantic" }, async (url) => {
@@ -212,7 +211,7 @@ describe("TestSemanticSearch", () => {
   it("converts distance to score (score = 1 - distance)", async () => {
     process.env.CLIP_BRIDGE_URL = "http://localhost:8765";
     const photo = makePhoto({ id: "dist-photo-1" });
-    await _cell.current!.insert(photos).values(photo);
+    await _cell.current?.insert(photos).values(photo);
 
     const { status, body } = await callSearch({ q: "cats", mode: "semantic" }, async () => ({
       ok: true,
@@ -227,13 +226,13 @@ describe("TestSemanticSearch", () => {
     const data = body as { results: { id: string; score: number }[] };
     const result = data.results.find((r) => r.id === photo.id);
     expect(result).toBeDefined();
-    expect(result!.score).toBeCloseTo(0.7, 5);
+    expect(result?.score).toBeCloseTo(0.7, 5);
   });
 
   it("skips bridge when CLIP_BRIDGE_URL not set", async () => {
     delete process.env.CLIP_BRIDGE_URL;
     const photo = makePhoto({ city: "London", country: "UK" });
-    await _cell.current!.insert(photos).values(photo);
+    await _cell.current?.insert(photos).values(photo);
 
     let fetchCalled = false;
     const { status } = await callSearch({ q: "London" }, async () => {
@@ -248,7 +247,7 @@ describe("TestSemanticSearch", () => {
   it("degrades gracefully when bridge returns 500", async () => {
     process.env.CLIP_BRIDGE_URL = "http://localhost:8765";
     const photo = makePhoto({ city: "Mumbai", country: "India" });
-    await _cell.current!.insert(photos).values(photo);
+    await _cell.current?.insert(photos).values(photo);
 
     const { status, body } = await callSearch({ q: "Mumbai" }, async () => ({
       ok: false,
@@ -278,7 +277,7 @@ describe("TestHybridMerge", () => {
 
   it("deduplicates results appearing in both text and semantic", async () => {
     const photo = makePhoto({ city: "Rome", country: "Italy" });
-    await _cell.current!.insert(photos).values(photo);
+    await _cell.current?.insert(photos).values(photo);
 
     const { status, body } = await callSearch({ q: "Rome", mode: "hybrid" }, async () => ({
       ok: true,
@@ -298,7 +297,7 @@ describe("TestHybridMerge", () => {
 
   it("assigns hybrid matchSource for photos found by both methods", async () => {
     const photo = makePhoto({ city: "Sydney", country: "Australia" });
-    await _cell.current!.insert(photos).values(photo);
+    await _cell.current?.insert(photos).values(photo);
 
     const { status, body } = await callSearch({ q: "Sydney", mode: "hybrid" }, async () => ({
       ok: true,
@@ -313,13 +312,13 @@ describe("TestHybridMerge", () => {
     const data = body as { results: { id: string; matchSource: string }[] };
     const result = data.results.find((r) => r.id === photo.id);
     expect(result).toBeDefined();
-    expect(result!.matchSource).toBe("hybrid");
+    expect(result?.matchSource).toBe("hybrid");
   });
 
   it("sorts by score descending", async () => {
     const photo1 = makePhoto({ city: "Cairo", country: "Egypt" });
     const photo2 = makePhoto({ city: "Cairo", country: "Egypt" });
-    await _cell.current!.insert(photos).values([photo1, photo2]);
+    await _cell.current?.insert(photos).values([photo1, photo2]);
 
     const { status, body } = await callSearch({ q: "Cairo", mode: "hybrid" }, async () => ({
       ok: true,
@@ -370,7 +369,7 @@ describe("TestValidation", () => {
 
   it("clamps limit to max 50", async () => {
     const photo = makePhoto({ city: "Oslo", country: "Norway" });
-    await _cell.current!.insert(photos).values(photo);
+    await _cell.current?.insert(photos).values(photo);
 
     const { status } = await callSearch({ q: "Oslo", limit: "999" });
     expect(status).toBe(200);
@@ -396,7 +395,7 @@ describe("TestResponse", () => {
       country: "Austria",
       filenameFinal: "vienna_trip.jpg",
     });
-    await _cell.current!.insert(photos).values(photo);
+    await _cell.current?.insert(photos).values(photo);
 
     const { status, body } = await callSearch({ q: "Vienna" });
 
@@ -419,7 +418,7 @@ describe("TestResponse", () => {
 
   it("response has query and mode fields", async () => {
     const photo = makePhoto({ city: "Athens", country: "Greece" });
-    await _cell.current!.insert(photos).values(photo);
+    await _cell.current?.insert(photos).values(photo);
 
     const { status, body } = await callSearch({ q: "Athens", mode: "text" });
 
@@ -431,7 +430,7 @@ describe("TestResponse", () => {
 
   it("response has total field", async () => {
     const photo = makePhoto({ city: "Prague", country: "CzechRepublic" });
-    await _cell.current!.insert(photos).values(photo);
+    await _cell.current?.insert(photos).values(photo);
 
     const { status, body } = await callSearch({ q: "Prague" });
 

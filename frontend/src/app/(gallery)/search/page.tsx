@@ -65,8 +65,19 @@ function ResultCard({ result }: { result: SearchResult }) {
           />
         ) : (
           <div className="flex h-full items-center justify-center text-zinc-400 dark:text-zinc-600">
-            <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 3l18 18" />
+            <svg
+              className="h-10 w-10"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 3l18 18"
+              />
             </svg>
           </div>
         )}
@@ -79,11 +90,15 @@ function ResultCard({ result }: { result: SearchResult }) {
 
       {/* Metadata */}
       <div className="px-3 py-2 text-xs text-zinc-600 dark:text-zinc-400">
-        <p className="font-medium text-zinc-800 dark:text-zinc-200">{formatDate(result.dateTaken)}</p>
+        <p className="font-medium text-zinc-800 dark:text-zinc-200">
+          {formatDate(result.dateTaken)}
+        </p>
         {(result.city || result.country) && (
           <p className="truncate">{[result.city, result.country].filter(Boolean).join(", ")}</p>
         )}
-        <span className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${SOURCE_STYLES[result.matchSource]}`}>
+        <span
+          className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${SOURCE_STYLES[result.matchSource]}`}
+        >
           {result.matchSource}
         </span>
       </div>
@@ -116,10 +131,9 @@ export default function SearchPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(
-        `/api/search?q=${encodeURIComponent(q)}&mode=${m}&limit=48`,
-        { signal }
-      );
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&mode=${m}&limit=48`, {
+        signal,
+      });
       if (!res.ok) throw new Error(`Search failed: ${res.status}`);
       const json = (await res.json()) as SearchResponse;
       setResults(json);
@@ -161,7 +175,12 @@ export default function SearchPage() {
               stroke="currentColor"
               aria-hidden="true"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
             </svg>
             <input
               type="text"
@@ -202,9 +221,7 @@ export default function SearchPage() {
       )}
 
       {loading && (
-        <div className="py-24 text-center text-sm text-zinc-400 dark:text-zinc-600">
-          Searching…
-        </div>
+        <div className="py-24 text-center text-sm text-zinc-400 dark:text-zinc-600">Searching…</div>
       )}
 
       {!loading && error && (

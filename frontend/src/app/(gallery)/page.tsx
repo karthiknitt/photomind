@@ -80,8 +80,19 @@ function PhotoCard({ photo }: { photo: PhotoRow }) {
           />
         ) : (
           <div className="flex h-full items-center justify-center text-zinc-400 dark:text-zinc-600">
-            <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 3l18 18" />
+            <svg
+              className="h-10 w-10"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 3l18 18"
+              />
             </svg>
           </div>
         )}
@@ -89,15 +100,21 @@ function PhotoCard({ photo }: { photo: PhotoRow }) {
 
       {/* Metadata */}
       <div className="px-3 py-2 text-xs text-zinc-600 dark:text-zinc-400">
-        <p className="font-medium text-zinc-800 dark:text-zinc-200">{formatDate(photo.dateTaken)}</p>
+        <p className="font-medium text-zinc-800 dark:text-zinc-200">
+          {formatDate(photo.dateTaken)}
+        </p>
         {locationLabel(photo) && <p className="truncate">{locationLabel(photo)}</p>}
         <div className="mt-1 flex items-center gap-2 text-zinc-400 dark:text-zinc-500">
           {photo.width && photo.height && (
-            <span>{photo.width}×{photo.height}</span>
+            <span>
+              {photo.width}×{photo.height}
+            </span>
           )}
           {photo.fileSize && <span>{formatSize(photo.fileSize)}</span>}
           {photo.faceCount > 0 && (
-            <span>{photo.faceCount} {photo.faceCount === 1 ? "face" : "faces"}</span>
+            <span>
+              {photo.faceCount} {photo.faceCount === 1 ? "face" : "faces"}
+            </span>
           )}
         </div>
       </div>

@@ -279,9 +279,7 @@ class TestRunClusteringSuccess:
         mock_chromadb = _mock_chroma(face_ids, embeddings)
 
         with patch("photomind.services.cluster.chromadb", mock_chromadb):
-            cluster_mod.run_clustering(
-                db_path, tmp_path / "chroma", min_cluster_size=2
-            )
+            cluster_mod.run_clustering(db_path, tmp_path / "chroma", min_cluster_size=2)
 
         clusters = _read_clusters(db_path)
         # Each cluster has 2 faces from different photos → photo_count=2
