@@ -121,7 +121,7 @@ class TestRunClusteringEmpty:
     def test_empty_collection_raises_no_error(
         self, tmp_path: Path, cluster_mod: Any
     ) -> None:
-        """When ChromaDB 'faces' collection does not exist, returns zero ClusterResult."""
+        """Returns zero ClusterResult when ChromaDB 'faces' collection is missing."""
         db_path = tmp_path / "test.db"
         _make_db(db_path, [])
 
@@ -138,7 +138,7 @@ class TestRunClusteringEmpty:
         assert result.n_noise == 0
 
     def test_zero_faces_in_collection(self, tmp_path: Path, cluster_mod: Any) -> None:
-        """When collection exists but has no embeddings, returns zero ClusterResult."""
+        """Returns zero ClusterResult when collection exists but has no embeddings."""
         db_path = tmp_path / "test.db"
         _make_db(db_path, [])
 
