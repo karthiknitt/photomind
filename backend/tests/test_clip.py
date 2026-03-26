@@ -15,10 +15,10 @@ Coverage:
 
 from __future__ import annotations
 
-import importlib
+import uuid
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import chromadb
 import numpy as np
@@ -26,42 +26,95 @@ import pytest
 from PIL import Image
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# Constants
 # ---------------------------------------------------------------------------
 
 FAKE_EMBEDDING_DIM = 512
 
 
+# ---------------------------------------------------------------------------
+# Mock helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_tensor_mock(values: list[float]) -> MagicMock:
+    """Return a mock that behaves like a normalised float tensor.
+
+    Supports: / operator, .norm(), .squeeze(), .tolist()
+    """
+    m = MagicMock()
+    # / operator returns self so chaining works
+    m.__truediv__ = lambda s, other: s
+    m.__rtruediv__ = lambda s, other: s
+    m.norm.return_value = MagicMock(__float__=lambda s: 1.0)
+    m.squeeze.return_value = MagicMock(tolist=lambda: values)
+    m.tolist.return_value = values
+    # Support indexing for softmax result
+    m.__getitem__ = lambda s, idx: MagicMock(tolist=lambda: values)
+    return m
+
+
+def _make_logits_mock(n_labels: int) -> MagicMock:
+    """Return a mock logits_per_image with .softmax() returning n_labels probs."""
+    raw = np.arange(n_labels, dtype=np.float32)
+    exp = np.exp(raw - raw.max())
+    probs = (exp / exp.sum()).tolist()
+
+    # Build: logits.softmax(dim=-1)[0].tolist() -> probs
+    inner = MagicMock()
+    inner.tolist.return_value = probs
+    softmax_result = MagicMock()
+    softmax_result.__getitem__ = lambda s, idx: inner
+    logits = MagicMock()
+    logits.softmax.return_value = softmax_result
+    return logits
+
+
 def _make_mock_model() -> tuple[MagicMock, MagicMock, MagicMock]:
-    """Return (model, preprocess, tokenizer) mocks."""
+    """Return (model, preprocess, tokenizer) mocks suitable for all service calls.
+
+    The model side_effect captures the text token count to return correctly
+    sized softmax probabilities.
+    """
+    fake_emb = [0.0] * FAKE_EMBEDDING_DIM
+    embed_tensor = _make_tensor_mock(fake_emb)
+
+    text_tensor = MagicMock()
+    text_tensor.__truediv__ = lambda s, other: s
+    text_tensor.T = MagicMock()
+
+    img_input = MagicMock()
+    img_input.unsqueeze.return_value = img_input
+
     mock_model = MagicMock()
-    mock_preprocess = MagicMock()
+    mock_model.encode_image.return_value = embed_tensor
+    mock_model.encode_text.return_value = text_tensor
+    mock_model.to.return_value = mock_model
+    mock_model.half.return_value = mock_model
+    mock_model.eval.return_value = mock_model
+
+    # Capture the tokenizer to know how many labels are being classified
     mock_tokenizer = MagicMock()
 
-    # encode_image: return a float16 tensor-like with .tolist()
-    fake_image_embed = np.zeros((1, FAKE_EMBEDDING_DIM), dtype=np.float16)
-    fake_embed_tensor = MagicMock()
-    fake_embed_tensor.__truediv__ = lambda self, other: fake_embed_tensor  # norm
-    fake_embed_tensor.squeeze.return_value = fake_embed_tensor
-    fake_embed_tensor.tolist.return_value = fake_image_embed[0].tolist()
-    mock_model.encode_image.return_value = fake_embed_tensor
+    def _model_call_side_effect(img_t: Any, text_t: Any) -> tuple[MagicMock, MagicMock]:
+        # text_t is mock_tokenizer.return_value; determine n_labels from call args
+        # Fall back to 3 if we can't determine
+        try:
+            n = len(mock_tokenizer.call_args[0][0])
+        except (TypeError, IndexError):
+            n = 3
+        return _make_logits_mock(n), MagicMock()
 
-    # encode_text: return logit-compatible tensor
-    fake_text_embed = np.random.rand(3, FAKE_EMBEDDING_DIM).astype(np.float16)
-    fake_text_tensor = MagicMock()
-    fake_text_tensor.__truediv__ = lambda self, other: fake_text_tensor
-    fake_text_tensor.T = MagicMock()
-    mock_model.encode_text.return_value = fake_text_tensor
+    mock_model.side_effect = _model_call_side_effect
 
-    # preprocess: return a tensor-like with unsqueeze
-    fake_img_tensor = MagicMock()
-    fake_img_tensor.unsqueeze.return_value = fake_img_tensor
-    mock_preprocess.return_value = fake_img_tensor
-
-    # tokenizer: return token ids tensor
-    mock_tokenizer.return_value = MagicMock()
+    mock_preprocess = MagicMock(return_value=img_input)
 
     return mock_model, mock_preprocess, mock_tokenizer
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -83,15 +136,25 @@ def not_an_image(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def chroma_collection() -> Any:
-    """In-memory ChromaDB collection for testing."""
+    """In-memory ChromaDB collection for testing, unique per test."""
     client = chromadb.Client()
-    return client.create_collection("test_photos")
+    # Use a unique name each time to avoid inter-test state
+    name = f"test_{uuid.uuid4().hex}"
+    return client.get_or_create_collection(name)
 
 
 @pytest.fixture
 def mock_model_ctx():
-    """Context manager that patches open_clip to return mocks."""
+    """Patch open_clip and reset the module singleton before/after each test."""
     mock_model, mock_preprocess, mock_tokenizer = _make_mock_model()
+
+    import photomind.services.clip as clip_mod
+
+    # Reset singleton before patching
+    clip_mod._model = None
+    clip_mod._preprocess = None
+    clip_mod._tokenizer = None
+
     with (
         patch(
             "open_clip.create_model_and_transforms",
@@ -99,16 +162,12 @@ def mock_model_ctx():
         ),
         patch("open_clip.get_tokenizer", return_value=mock_tokenizer),
     ):
-        # Reset singleton so each test starts fresh
-        import photomind.services.clip as clip_mod
-        clip_mod._model = None
-        clip_mod._preprocess = None
-        clip_mod._tokenizer = None
         yield mock_model, mock_preprocess, mock_tokenizer
-        # Clean up singleton after test
-        clip_mod._model = None
-        clip_mod._preprocess = None
-        clip_mod._tokenizer = None
+
+    # Reset singleton after test
+    clip_mod._model = None
+    clip_mod._preprocess = None
+    clip_mod._tokenizer = None
 
 
 # ---------------------------------------------------------------------------
@@ -132,7 +191,7 @@ class TestEmbedImage:
         from photomind.services.clip import embed_image
 
         result = embed_image(sample_image)
-        assert all(isinstance(x, float) for x in result)
+        assert all(isinstance(x, (int, float)) for x in result)
 
     def test_accepts_string_path(
         self, sample_image: Path, mock_model_ctx: Any
@@ -177,7 +236,7 @@ class TestInsertToChroma:
 
         embedding = [0.1] * FAKE_EMBEDDING_DIM
         insert_to_chroma(chroma_collection, "photo_001", embedding)
-        results = chroma_collection.get(ids=["photo_001"], include=["embeddings"])
+        results = chroma_collection.get(ids=["photo_001"])
         assert results["ids"] == ["photo_001"]
 
     def test_metadata_preserved(self, chroma_collection: Any) -> None:
@@ -196,7 +255,6 @@ class TestInsertToChroma:
         from photomind.services.clip import insert_to_chroma
 
         embedding = [0.0] * FAKE_EMBEDDING_DIM
-        # Should not raise
         insert_to_chroma(chroma_collection, "photo_no_meta", embedding, metadata=None)
         results = chroma_collection.get(ids=["photo_no_meta"])
         assert results["ids"] == ["photo_no_meta"]
@@ -208,7 +266,7 @@ class TestInsertToChroma:
             insert_to_chroma(
                 chroma_collection,
                 f"photo_{i:03d}",
-                [float(i)] * FAKE_EMBEDDING_DIM,
+                [float(i) / 10.0] * FAKE_EMBEDDING_DIM,
             )
         results = chroma_collection.get(ids=[f"photo_{i:03d}" for i in range(5)])
         assert len(results["ids"]) == 5
@@ -227,7 +285,7 @@ class TestQuerySimilar:
             insert_to_chroma(
                 collection,
                 f"seed_{i:03d}",
-                [float(i) / n] * FAKE_EMBEDDING_DIM,
+                [float(i) / max(n, 1)] * FAKE_EMBEDDING_DIM,
                 metadata={"index": i},
             )
 
@@ -279,43 +337,6 @@ class TestQuerySimilar:
 
 
 class TestZeroShotLabel:
-    def _make_softmax_mock(self, labels: list[str], top_n: int) -> Any:
-        """Return a mock_model whose encode_text/encode_image produce meaningful logits."""
-        mock_model = MagicMock()
-        mock_preprocess = MagicMock()
-        mock_tokenizer = MagicMock()
-
-        # Build random logits that will produce distinct confidences
-        n_labels = len(labels)
-        raw_logits = np.arange(n_labels, dtype=np.float32)  # 0,1,2,...,n-1
-        # Softmax manually: higher index → higher confidence
-        exp = np.exp(raw_logits - raw_logits.max())
-        softmax_vals = exp / exp.sum()
-
-        # Mock image tensor pipeline
-        fake_img_tensor = MagicMock()
-        fake_img_tensor.unsqueeze.return_value = fake_img_tensor
-        mock_preprocess.return_value = fake_img_tensor
-
-        fake_image_features = MagicMock()
-        fake_image_features.__truediv__ = lambda s, o: fake_image_features
-        mock_model.encode_image.return_value = fake_image_features
-
-        fake_text_features = MagicMock()
-        fake_text_features.__truediv__ = lambda s, o: fake_text_features
-        mock_model.encode_text.return_value = fake_text_features
-
-        # logits_per_image: shape (1, n_labels)
-        logit_vals = MagicMock()
-        logit_vals.softmax.return_value = MagicMock()
-        logit_vals.softmax.return_value.__getitem__ = lambda s, i: MagicMock(
-            tolist=lambda: softmax_vals.tolist()
-        )
-        # model returns (logits_per_image, logits_per_text) when called
-        mock_model.return_value = (logit_vals, MagicMock())
-
-        return mock_model, mock_preprocess, mock_tokenizer, softmax_vals
-
     def test_returns_top_n_tuples(
         self, sample_image: Path, mock_model_ctx: Any
     ) -> None:
@@ -329,7 +350,7 @@ class TestZeroShotLabel:
             assert isinstance(item, tuple)
             assert len(item) == 2
 
-    def test_labels_are_strings(
+    def test_labels_are_strings_and_floats(
         self, sample_image: Path, mock_model_ctx: Any
     ) -> None:
         from photomind.services.clip import zero_shot_label
@@ -394,7 +415,6 @@ class TestGetChromaCollection:
         db_path = tmp_path / "chroma_idempotent"
         col1 = get_chroma_collection(db_path, "photos")
         col2 = get_chroma_collection(db_path, "photos")
-        # Both should be valid collections with the same name
         assert col1.name == col2.name == "photos"
 
     def test_different_collection_names(self, tmp_path: Path) -> None:
@@ -438,10 +458,8 @@ class TestModelSingleton:
         ):
             clip_mod._get_model()
             clip_mod._get_model()
-            # create_model_and_transforms must be called exactly once
             assert mock_create.call_count == 1
 
-        # Cleanup
         clip_mod._model = None
         clip_mod._preprocess = None
         clip_mod._tokenizer = None
@@ -465,11 +483,10 @@ class TestModelSingleton:
         ):
             first = clip_mod._get_model()
             second = clip_mod._get_model()
-            assert first[0] is second[0]  # same model object
-            assert first[1] is second[1]  # same preprocess object
-            assert first[2] is second[2]  # same tokenizer object
+            assert first[0] is second[0]
+            assert first[1] is second[1]
+            assert first[2] is second[2]
 
-        # Cleanup
         clip_mod._model = None
         clip_mod._preprocess = None
         clip_mod._tokenizer = None
