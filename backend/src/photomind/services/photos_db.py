@@ -277,9 +277,7 @@ def get_processed_source_paths(db_path: str | Path) -> set[tuple[str, str]]:
     """
     with _open(db_path) as conn:
         conn.execute(_CREATE_TABLE_SQL)
-        rows = conn.execute(
-            "SELECT source_remote, source_path FROM photos"
-        ).fetchall()
+        rows = conn.execute("SELECT source_remote, source_path FROM photos").fetchall()
     return {(row[0], row[1]) for row in rows}
 
 

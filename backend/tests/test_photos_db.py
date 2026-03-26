@@ -244,30 +244,40 @@ class TestGetProcessedSourcePaths:
         # Use a fresh DB that has no rows at all
         empty_db = db_path.parent / "empty.db"
         from photomind.services.photos_db import get_processed_source_paths
+
         result = get_processed_source_paths(empty_db)
         assert result == set()
 
     def test_returns_known_source_paths(self, db_path: Path) -> None:
-        create_photo(db_path, _make_record(
-            id="id-1",
-            source_remote="onedrive_karthik",
-            source_path="/Pictures/2024/IMG_001.jpg",
-        ))
-        create_photo(db_path, _make_record(
-            id="id-2",
-            source_remote="onedrive_wife",
-            source_path="/Pictures/wedding/shot.jpg",
-        ))
+        create_photo(
+            db_path,
+            _make_record(
+                id="id-1",
+                source_remote="onedrive_karthik",
+                source_path="/Pictures/2024/IMG_001.jpg",
+            ),
+        )
+        create_photo(
+            db_path,
+            _make_record(
+                id="id-2",
+                source_remote="onedrive_wife",
+                source_path="/Pictures/wedding/shot.jpg",
+            ),
+        )
         result = get_processed_source_paths(db_path)
         assert ("onedrive_karthik", "/Pictures/2024/IMG_001.jpg") in result
         assert ("onedrive_wife", "/Pictures/wedding/shot.jpg") in result
 
     def test_returns_set_of_tuples(self, db_path: Path) -> None:
-        create_photo(db_path, _make_record(
-            id="id-1",
-            source_remote="onedrive_karthik",
-            source_path="/Pictures/photo.jpg",
-        ))
+        create_photo(
+            db_path,
+            _make_record(
+                id="id-1",
+                source_remote="onedrive_karthik",
+                source_path="/Pictures/photo.jpg",
+            ),
+        )
         result = get_processed_source_paths(db_path)
         assert isinstance(result, set)
         item = next(iter(result))
@@ -275,21 +285,27 @@ class TestGetProcessedSourcePaths:
         assert len(item) == 2
 
     def test_excludes_no_rows_on_different_remote(self, db_path: Path) -> None:
-        create_photo(db_path, _make_record(
-            id="id-1",
-            source_remote="onedrive_karthik",
-            source_path="/Pictures/photo.jpg",
-        ))
+        create_photo(
+            db_path,
+            _make_record(
+                id="id-1",
+                source_remote="onedrive_karthik",
+                source_path="/Pictures/photo.jpg",
+            ),
+        )
         result = get_processed_source_paths(db_path)
         assert ("onedrive_wife", "/Pictures/photo.jpg") not in result
         assert ("onedrive_karthik", "/Pictures/photo.jpg") in result
 
     def test_multiple_photos_same_remote(self, db_path: Path) -> None:
         for i in range(3):
-            create_photo(db_path, _make_record(
-                id=f"id-{i}",
-                source_remote="onedrive_karthik",
-                source_path=f"/Pictures/IMG_{i:03d}.jpg",
-            ))
+            create_photo(
+                db_path,
+                _make_record(
+                    id=f"id-{i}",
+                    source_remote="onedrive_karthik",
+                    source_path=f"/Pictures/IMG_{i:03d}.jpg",
+                ),
+            )
         result = get_processed_source_paths(db_path)
         assert len(result) == 3
