@@ -194,9 +194,7 @@ class TestEmbedImage:
         result = embed_image(sample_image)
         assert all(isinstance(x, (int, float)) for x in result)
 
-    def test_accepts_string_path(
-        self, sample_image: Path, mock_model_ctx: Any
-    ) -> None:
+    def test_accepts_string_path(self, sample_image: Path, mock_model_ctx: Any) -> None:
         from photomind.services.clip import embed_image
 
         result = embed_image(str(sample_image))
@@ -246,9 +244,7 @@ class TestInsertToChroma:
         embedding = [0.5] * FAKE_EMBEDDING_DIM
         meta = {"source_path": "/onedrive/photos/vacation.jpg", "year": 2023}
         insert_to_chroma(chroma_collection, "photo_meta", embedding, metadata=meta)
-        results = chroma_collection.get(
-            ids=["photo_meta"], include=["metadatas"]
-        )
+        results = chroma_collection.get(ids=["photo_meta"], include=["metadatas"])
         assert results["metadatas"][0]["source_path"] == "/onedrive/photos/vacation.jpg"
         assert results["metadatas"][0]["year"] == 2023
 
@@ -399,18 +395,14 @@ class TestZeroShotLabel:
         with pytest.raises(FileNotFoundError):
             zero_shot_label("/nonexistent/image.jpg", ["cat", "dog"])
 
-    def test_accepts_string_path(
-        self, sample_image: Path, mock_model_ctx: Any
-    ) -> None:
+    def test_accepts_string_path(self, sample_image: Path, mock_model_ctx: Any) -> None:
         from photomind.services.clip import zero_shot_label
 
         labels = ["cat", "dog"]
         result = zero_shot_label(str(sample_image), labels, top_n=1)
         assert len(result) == 1
 
-    def test_top_n_defaults_to_3(
-        self, sample_image: Path, mock_model_ctx: Any
-    ) -> None:
+    def test_top_n_defaults_to_3(self, sample_image: Path, mock_model_ctx: Any) -> None:
         from photomind.services.clip import zero_shot_label
 
         labels = ["cat", "dog", "bird", "fish", "sunset"]
