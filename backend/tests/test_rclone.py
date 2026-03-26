@@ -317,3 +317,61 @@ class TestListFilesParseErrors:
         with patch(_PATCH_RUN, return_value=mock_result):
             with pytest.raises(RcloneError, match="Failed to parse"):
                 list_files("onedrive_karthik", "/Pictures/2024")
+
+
+# ---------------------------------------------------------------------------
+# list_files recursive support
+# ---------------------------------------------------------------------------
+
+
+class TestListFilesRecursive:
+    """Tests for recursive=True flag on list_files."""
+
+    def test_recursive_calls_lsjson_with_recursive_flag(self) -> None:
+        """recursive=True must pass --recursive to rclone lsjson."""
+        mock_result = _make_completed_process(stdout=json.dumps([]))
+        with patch(_PATCH_RUN, return_value=mock_result) as mock_run:
+            list_files("onedrive_karthik", "/Pictures", recursive=True)
+
+        cmd = mock_run.call_args[0][0]
+        assert "--recursive" in cmd
+
+    def test_non_recursive_does_not_pass_recursive_flag(self) -> None:
+        """Default (recursive=False) must NOT include --recursive."""
+        mock_result = _make_completed_process(stdout=json.dumps([]))
+        with patch(_PATCH_RUN, return_value=mock_result) as mock_run:
+            list_files("onedrive_karthik", "/Pictures")
+
+        cmd = mock_run.call_args[0][0]
+        assert "--recursive" not in cmd
+
+    def test_recursive_returns_nested_files(self) -> None:
+        """Recursive listing returns files from subdirectories."""
+        deep_files = [
+            {
+                "Path": "2024/Jan/photo.jpg",
+                "Name": "photo.jpg",
+                "Size": 3000000,
+                "IsDir": False,
+            },
+            {
+                "Path": "2024/Feb/pic.jpg",
+                "Name": "pic.jpg",
+                "Size": 2000000,
+                "IsDir": False,
+            },
+        ]
+        mock_result = _make_completed_process(stdout=json.dumps(deep_files))
+        with patch(_PATCH_RUN, return_value=mock_result):
+            results = list_files("onedrive_karthik", "/Pictures", recursive=True)
+
+        assert len(results) == 2
+        assert results[0].path == "2024/Jan/photo.jpg"
+        assert results[1].path == "2024/Feb/pic.jpg"
+
+    def test_recursive_error_raises_rclone_error(self) -> None:
+        """Errors during recursive listing propagate as RcloneError."""
+        mock_result = _make_completed_process(returncode=1, stderr="remote not found")
+        with patch(_PATCH_RUN, return_value=mock_result):
+            with pytest.raises(RcloneError):
+                list_files("onedrive_karthik", "/Pictures", recursive=True)

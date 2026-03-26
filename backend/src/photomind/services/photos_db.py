@@ -263,6 +263,24 @@ def get_phashes(db_path: str | Path) -> set[str]:
     return {row[0] for row in rows}
 
 
+def get_processed_source_paths(db_path: str | Path) -> set[tuple[str, str]]:
+    """Return (source_remote, source_path) pairs for all photos already in the DB.
+
+    Used by the daemon to skip files that have already been processed (any status).
+    Returns a set of tuples for O(1) membership checks per file in a scan batch.
+
+    Args:
+        db_path: Path to the SQLite database file.
+
+    Returns:
+        Set of (remote, path) tuples (may be empty if no photos exist yet).
+    """
+    with _open(db_path) as conn:
+        conn.execute(_CREATE_TABLE_SQL)
+        rows = conn.execute("SELECT source_remote, source_path FROM photos").fetchall()
+    return {(row[0], row[1]) for row in rows}
+
+
 def get_existing_filenames(db_path: str | Path) -> set[str]:
     """Return all non-null filename_final values from the photos table.
 

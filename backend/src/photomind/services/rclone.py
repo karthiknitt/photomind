@@ -29,22 +29,29 @@ class RcloneError(Exception):
     """Raised when rclone exits with a non-zero return code."""
 
 
-def list_files(remote: str, remote_path: str) -> list[RemoteFile]:
+def list_files(
+    remote: str, remote_path: str, *, recursive: bool = False
+) -> list[RemoteFile]:
     """List files in a remote directory using ``rclone lsjson``.
 
     Args:
         remote: rclone remote name (e.g. ``"onedrive_karthik"``).
         remote_path: path on the remote (e.g. ``"/Pictures/2024"``).
+        recursive: if True, passes ``--recursive`` to rclone so all
+            files in subdirectories are returned in a single call.
 
     Returns:
-        List of :class:`RemoteFile` objects (top-level only — not recursive).
+        List of :class:`RemoteFile` objects.
 
     Raises:
         RcloneError: if rclone exits with a non-zero return code.
     """
     target = f"{remote}:{remote_path}"
+    cmd = ["rclone", "lsjson", target]
+    if recursive:
+        cmd.append("--recursive")
     result = subprocess.run(
-        ["rclone", "lsjson", target],
+        cmd,
         capture_output=True,
         text=True,
     )
