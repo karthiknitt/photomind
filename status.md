@@ -60,6 +60,7 @@ Phase 2 — AI Intelligence / Sprint 2.3 IN PROGRESS (feat/sprint-2.3 branch, PR
 | feat/geo-service | T2.1 Geo | merged | #9 |
 | feat/rename-service | T2.2 rename + photos_db | merged | #10 |
 | feat/pipeline | T2.2 core pipeline | merged | #11 |
+| feat/sprint-2.3 | T2.3 daemon + meme fix | open PR | #12 |
 
 ## Completed This Session (Sprint 2.3)
 - meme.py: WhatsApp EXIF software downgraded HIGH→MEDIUM; new `_check_whatsapp_filename()`
