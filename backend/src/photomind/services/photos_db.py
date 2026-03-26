@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import sqlite3
 import time
+from collections.abc import Generator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -134,12 +136,20 @@ _UPDATABLE_COLUMNS = {
 }
 
 
-def _open(db_path: str | Path) -> sqlite3.Connection:
-    """Open a connection with WAL mode and FKs disabled."""
+@contextmanager
+def _open(db_path: str | Path) -> Generator[sqlite3.Connection, None, None]:
+    """Open a WAL connection, commit/rollback, and always close."""
     conn = sqlite3.connect(str(db_path))
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=OFF")
-    return conn
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def create_photo(db_path: str | Path, record: PhotoRecord) -> None:
@@ -209,8 +219,13 @@ def update_photo(
 
         update_photo(db_path, photo_id, status="DONE", filename_final="foo.jpg")
     """
-    # Filter to only known updatable columns
-    updates = {k: v for k, v in fields.items() if k in _UPDATABLE_COLUMNS}
+    # Filter to known columns; coerce booleans to int for sqlite3 consistency
+    _BOOL_COLS = {"is_meme", "clip_indexed"}
+    updates = {
+        k: (int(v) if k in _BOOL_COLS and isinstance(v, bool) else v)  # type: ignore[arg-type]
+        for k, v in fields.items()
+        if k in _UPDATABLE_COLUMNS
+    }
 
     # Always bump updated_at unless caller provides it
     if "updated_at" not in updates:

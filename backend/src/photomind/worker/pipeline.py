@@ -112,7 +112,7 @@ def process_photo(
         tmp_file = rclone.download_file(source_remote, source_path, config.tmp_path)
 
         # ── Stage 2: EXIF ─────────────────────────────────────────────────────
-        logger.info("[%s] Stage 3: EXIF", photo_id)
+        logger.info("[%s] Stage 2: EXIF", photo_id)
         exif = extract_exif(tmp_file)
         file_size = tmp_file.stat().st_size
 
@@ -164,6 +164,7 @@ def process_photo(
                 ActionType.SKIPPED_DUPLICATE,
                 json.dumps({"matching_phash": matching_hash}),
             )
+        known_phashes.add(phash)  # prevent intra-batch duplicates
 
         # ── Stage 6: Thumbnail ────────────────────────────────────────────────
         logger.info("[%s] Stage 6: thumbnail", photo_id)
@@ -217,7 +218,7 @@ def process_photo(
         output_path = config.output.path
         rclone.upload_file(tmp_file, output_remote, output_path)
 
-        library_path = f"{output_path}{final_name}"
+        library_path = f"{output_path.rstrip('/')}/{final_name}"
 
         # ── Stage 15: DB finalize ─────────────────────────────────────────────
         logger.info("[%s] Stage 15: finalize", photo_id)
