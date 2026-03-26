@@ -330,6 +330,21 @@ class TestQuerySimilar:
         for r in results:
             assert isinstance(r["distance"], (int, float))
 
+    def test_empty_collection_returns_empty_list(self, chroma_collection: Any) -> None:
+        from photomind.services.clip import query_similar
+
+        results = query_similar(chroma_collection, [0.5] * FAKE_EMBEDDING_DIM, n_results=10)
+        assert results == []
+
+    def test_n_results_larger_than_collection_returns_all(
+        self, chroma_collection: Any
+    ) -> None:
+        from photomind.services.clip import query_similar
+
+        self._seed_collection(chroma_collection, 3)
+        results = query_similar(chroma_collection, [0.5] * FAKE_EMBEDDING_DIM, n_results=100)
+        assert len(results) == 3
+
 
 # ---------------------------------------------------------------------------
 # zero_shot_label tests
@@ -394,6 +409,23 @@ class TestZeroShotLabel:
         labels = ["cat", "dog", "bird", "fish", "sunset"]
         result = zero_shot_label(sample_image, labels)
         assert len(result) == 3
+
+    def test_raises_value_error_on_empty_labels(
+        self, sample_image: Path, mock_model_ctx: Any
+    ) -> None:
+        from photomind.services.clip import zero_shot_label
+
+        with pytest.raises(ValueError, match="non-empty"):
+            zero_shot_label(sample_image, [])
+
+    def test_top_n_larger_than_labels_returns_all(
+        self, sample_image: Path, mock_model_ctx: Any
+    ) -> None:
+        from photomind.services.clip import zero_shot_label
+
+        labels = ["cat", "dog"]
+        result = zero_shot_label(sample_image, labels, top_n=10)
+        assert len(result) == 2  # can't return more than len(labels)
 
 
 # ---------------------------------------------------------------------------

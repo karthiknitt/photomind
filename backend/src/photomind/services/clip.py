@@ -15,6 +15,7 @@ Singleton pattern ensures the model is loaded at most once per process.
 from __future__ import annotations
 
 import logging
+import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -32,30 +33,64 @@ logger = logging.getLogger(__name__)
 _model: Any = None
 _preprocess: Any = None
 _tokenizer: Any = None
+_model_lock = threading.Lock()
 
 
 def _get_model() -> tuple[Any, Any, Any]:
-    """Load the ViT-B/32 model once and cache it.
+    """Load the ViT-B/32 model once and cache it (thread-safe).
 
     Returns:
         Tuple of (model, preprocess, tokenizer).
     """
     global _model, _preprocess, _tokenizer  # noqa: PLW0603
 
-    if _model is None:
-        import open_clip  # imported lazily to allow mocking in tests
+    if _model is not None:
+        return _model, _preprocess, _tokenizer
 
-        logger.info("Loading open_clip ViT-B/32 model (float16, CPU)...")
-        _model, _, _preprocess = open_clip.create_model_and_transforms(
-            "ViT-B-32",
-            pretrained="openai",
-        )
-        _model = _model.to("cpu").half()  # float16
-        _model.eval()
-        _tokenizer = open_clip.get_tokenizer("ViT-B-32")
-        logger.info("open_clip model loaded and cached.")
+    with _model_lock:
+        if _model is None:  # double-checked locking
+            import open_clip  # imported lazily to allow mocking in tests
+
+            logger.info("Loading open_clip ViT-B/32 model (float16, CPU)...")
+            _model, _, _preprocess = open_clip.create_model_and_transforms(
+                "ViT-B-32",
+                pretrained="openai",
+            )
+            _model = _model.to("cpu").half()  # float16
+            _model.eval()
+            _tokenizer = open_clip.get_tokenizer("ViT-B-32")
+            logger.info("open_clip model loaded and cached.")
 
     return _model, _preprocess, _tokenizer
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+def _load_rgb_image(image_path: str | Path) -> Image.Image:
+    """Open an image file and return an RGB PIL Image.
+
+    Args:
+        image_path: path to the image file (JPEG, PNG, etc.)
+
+    Returns:
+        RGB PIL Image (caller is responsible for closing it).
+
+    Raises:
+        FileNotFoundError: if *image_path* does not exist.
+        ValueError: if the file cannot be opened as an image.
+    """
+    path = Path(image_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Image not found: {path}")
+    try:
+        with Image.open(path) as img:
+            img.load()
+            return img.convert("RGB")
+    except UnidentifiedImageError as exc:
+        raise ValueError(f"Cannot open {path} as an image: {exc}") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -78,17 +113,7 @@ def embed_image(image_path: str | Path) -> list[float]:
     """
     import torch
 
-    path = Path(image_path)
-    if not path.exists():
-        raise FileNotFoundError(f"Image not found: {path}")
-
-    try:
-        with Image.open(path) as img:
-            img.load()
-            img_rgb = img.convert("RGB")
-    except UnidentifiedImageError as exc:
-        raise ValueError(f"Cannot open {path} as an image: {exc}") from exc
-
+    img_rgb = _load_rgb_image(image_path)
     model, preprocess, _ = _get_model()
 
     img_tensor = preprocess(img_rgb).unsqueeze(0)
@@ -99,7 +124,7 @@ def embed_image(image_path: str | Path) -> list[float]:
         image_features = image_features / image_features.norm(dim=-1, keepdim=True)
 
     embedding: list[float] = image_features.squeeze().tolist()
-    logger.debug("embed_image: path=%s, dim=%d", path, len(embedding))
+    logger.debug("embed_image: path=%s, dim=%d", image_path, len(embedding))
     return embedding
 
 
@@ -138,6 +163,9 @@ def query_similar(
 ) -> list[dict[str, Any]]:
     """Query ChromaDB for the most similar images by embedding.
 
+    If the collection has fewer items than *n_results*, returns all available
+    items rather than raising an error (safe for empty or small collections).
+
     Args:
         collection: a chromadb Collection object.
         embedding: query vector (512-dim float list).
@@ -145,10 +173,16 @@ def query_similar(
 
     Returns:
         list of dicts, each with keys ``id``, ``distance``, ``metadata``.
+        Returns an empty list if the collection is empty.
     """
+    count = collection.count()
+    if count == 0:
+        return []
+
+    actual_n = min(n_results, count)
     raw = collection.query(
         query_embeddings=[embedding],
-        n_results=n_results,
+        n_results=actual_n,
         include=["distances", "metadatas"],
     )
 
@@ -173,41 +207,30 @@ def zero_shot_label(
 
     Args:
         image_path: path to the image file.
-        labels: list of candidate text labels.
+        labels: non-empty list of candidate text labels.
         top_n: how many top predictions to return (default 3).
+            If top_n > len(labels), all labels are returned.
 
     Returns:
         list of ``(label, confidence)`` tuples sorted by confidence descending.
 
     Raises:
         FileNotFoundError: if *image_path* does not exist.
+        ValueError: if the file cannot be opened as an image, or if *labels* is empty.
     """
+    if not labels:
+        raise ValueError("labels must be a non-empty list")
+
     import torch
 
-    path = Path(image_path)
-    if not path.exists():
-        raise FileNotFoundError(f"Image not found: {path}")
-
-    try:
-        with Image.open(path) as img:
-            img.load()
-            img_rgb = img.convert("RGB")
-    except UnidentifiedImageError as exc:
-        raise ValueError(f"Cannot open {path} as an image: {exc}") from exc
-
+    img_rgb = _load_rgb_image(image_path)
     model, preprocess, tokenizer = _get_model()
 
     img_tensor = preprocess(img_rgb).unsqueeze(0)
     text_tokens = tokenizer(labels)
 
     with torch.no_grad():
-        image_features = model.encode_image(img_tensor)
-        image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-
-        text_features = model.encode_text(text_tokens)
-        text_features = text_features / text_features.norm(dim=-1, keepdim=True)
-
-        # Cosine similarities as logits -> softmax
+        # Cosine similarities as logits -> softmax probabilities
         logits_per_image, _ = model(img_tensor, text_tokens)
         probs = logits_per_image.softmax(dim=-1)[0].tolist()
 
@@ -215,7 +238,7 @@ def zero_shot_label(
     top = [(label, float(conf)) for label, conf in scored[:top_n]]
     logger.info(
         "zero_shot_label: path=%s, top_label=%s (%.3f)",
-        path,
+        image_path,
         top[0][0] if top else "n/a",
         top[0][1] if top else 0.0,
     )
