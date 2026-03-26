@@ -17,10 +17,7 @@ Each test covers one pipeline outcome:
 
 from __future__ import annotations
 
-import io
 import sqlite3
-import time
-import uuid
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -29,9 +26,7 @@ from PIL import Image
 
 from photomind.config import PhotoMindConfig, PipelineConfig
 from photomind.services.action_log import get_recent_actions
-from photomind.services.photos_db import get_phashes
 from photomind.worker.pipeline import process_photo
-
 
 # ─── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -39,22 +34,29 @@ from photomind.worker.pipeline import process_photo
 def _make_jpeg(
     tmp_path: Path,
     name: str = "IMG_001.jpg",
-    width: int = 1920,
-    height: int = 1080,
+    width: int = 800,
+    height: int = 600,
     software: str | None = None,
 ) -> Path:
-    """Create a minimal valid JPEG for pipeline testing."""
+    """Create a minimal valid JPEG for pipeline testing.
+
+    Dimensions default to 800x600 (4:3) with a fake EXIF date so the image
+    doesn't trigger the meme classifier (which fires on ≥2 medium/low signals:
+    16:9 aspect ratio + no EXIF date would be enough to trigger it).
+    """
+    import piexif
+
     img = Image.new("RGB", (width, height), color=(128, 64, 32))
     dest = tmp_path / name
-    # Embed software tag only if specified (for WhatsApp meme test)
+    exif_0th: dict[int, object] = {}
     if software:
-        import piexif
-
-        exif_dict = {"0th": {piexif.ImageIFD.Software: software.encode()}}
-        exif_bytes = piexif.dump(exif_dict)
-        img.save(dest, format="JPEG", exif=exif_bytes)
-    else:
-        img.save(dest, format="JPEG")
+        exif_0th[piexif.ImageIFD.Software] = software.encode()
+    exif_dict: dict[str, object] = {
+        "0th": exif_0th,
+        "Exif": {piexif.ExifIFD.DateTimeOriginal: b"2024:12:25 14:30:22"},
+    }
+    exif_bytes = piexif.dump(exif_dict)
+    img.save(dest, format="JPEG", exif=exif_bytes)
     return dest
 
 
@@ -62,11 +64,13 @@ def _make_jpeg(
 def dirs(tmp_path: Path) -> dict[str, Path]:
     """Return a dict of temp directories used by the pipeline."""
     d = {
-        "tmp": tmp_path / "tmp",
+        "source": tmp_path / "source",  # where test images originate
+        "tmp": tmp_path / "tmp",  # pipeline download destination
         "thumbnails": tmp_path / "thumbnails",
         "db": tmp_path / "photomind.db",
         "chroma": tmp_path / "chroma_db",
     }
+    d["source"].mkdir()
     d["tmp"].mkdir()
     d["thumbnails"].mkdir()
     return d
@@ -110,7 +114,7 @@ def _count_action_log(db_path: Path, action: str) -> int:
 # ─── Shared mock setup ────────────────────────────────────────────────────────
 
 
-def _make_download_mock(fake_file: Path, dirs: dict[str, Path]):
+def _make_download_mock(fake_file: Path):
     """Return a mock for rclone.download_file that copies fake_file to tmp_path."""
 
     def _download(remote: str, remote_path: str, local_dest: str | Path) -> Path:
@@ -127,6 +131,9 @@ CLIP_PATCH = "photomind.worker.pipeline.clip"
 RCLONE_PATCH = "photomind.worker.pipeline.rclone"
 GEO_PATCH = "photomind.worker.pipeline.geo"
 
+_GEO_EMPTY = {"city": "", "state": "", "country": ""}
+_GEO_CHENNAI = {"city": "Chennai", "state": "TN", "country": "IN"}
+
 
 # ─── TestHappyPath ────────────────────────────────────────────────────────────
 
@@ -135,15 +142,17 @@ class TestHappyPath:
     def test_photo_marked_done_in_db(
         self, dirs: dict[str, Path], config: PhotoMindConfig, chroma_mock: MagicMock
     ) -> None:
-        fake_file = _make_jpeg(dirs["tmp"])
+        fake_file = _make_jpeg(dirs["source"])
 
         with (
-            patch(f"{RCLONE_PATCH}.download_file", side_effect=_make_download_mock(fake_file, dirs)),
+            patch(
+                f"{RCLONE_PATCH}.download_file",
+                side_effect=_make_download_mock(fake_file),
+            ),
             patch(f"{RCLONE_PATCH}.upload_file"),
             patch(f"{CLIP_PATCH}.embed_image", return_value=[0.1] * 512),
             patch(f"{CLIP_PATCH}.insert_to_chroma"),
-            patch(f"{CLIP_PATCH}.zero_shot_label", return_value=[]),
-            patch(f"{GEO_PATCH}.reverse_geocode", return_value={"city": "Chennai", "state": "TN", "country": "IN"}),
+            patch(f"{GEO_PATCH}.reverse_geocode", return_value=_GEO_CHENNAI),
         ):
             photo_id = process_photo(
                 config=config,
@@ -162,15 +171,17 @@ class TestHappyPath:
     def test_filename_final_set_after_processing(
         self, dirs: dict[str, Path], config: PhotoMindConfig, chroma_mock: MagicMock
     ) -> None:
-        fake_file = _make_jpeg(dirs["tmp"])
+        fake_file = _make_jpeg(dirs["source"])
 
         with (
-            patch(f"{RCLONE_PATCH}.download_file", side_effect=_make_download_mock(fake_file, dirs)),
+            patch(
+                f"{RCLONE_PATCH}.download_file",
+                side_effect=_make_download_mock(fake_file),
+            ),
             patch(f"{RCLONE_PATCH}.upload_file"),
             patch(f"{CLIP_PATCH}.embed_image", return_value=[0.1] * 512),
             patch(f"{CLIP_PATCH}.insert_to_chroma"),
-            patch(f"{CLIP_PATCH}.zero_shot_label", return_value=[]),
-            patch(f"{GEO_PATCH}.reverse_geocode", return_value={"city": "", "state": "", "country": ""}),
+            patch(f"{GEO_PATCH}.reverse_geocode", return_value=_GEO_EMPTY),
         ):
             photo_id = process_photo(
                 config=config,
@@ -190,15 +201,17 @@ class TestHappyPath:
     def test_thumbnail_created_on_disk(
         self, dirs: dict[str, Path], config: PhotoMindConfig, chroma_mock: MagicMock
     ) -> None:
-        fake_file = _make_jpeg(dirs["tmp"])
+        fake_file = _make_jpeg(dirs["source"])
 
         with (
-            patch(f"{RCLONE_PATCH}.download_file", side_effect=_make_download_mock(fake_file, dirs)),
+            patch(
+                f"{RCLONE_PATCH}.download_file",
+                side_effect=_make_download_mock(fake_file),
+            ),
             patch(f"{RCLONE_PATCH}.upload_file"),
             patch(f"{CLIP_PATCH}.embed_image", return_value=[0.1] * 512),
             patch(f"{CLIP_PATCH}.insert_to_chroma"),
-            patch(f"{CLIP_PATCH}.zero_shot_label", return_value=[]),
-            patch(f"{GEO_PATCH}.reverse_geocode", return_value={"city": "", "state": "", "country": ""}),
+            patch(f"{GEO_PATCH}.reverse_geocode", return_value=_GEO_EMPTY),
         ):
             photo_id = process_photo(
                 config=config,
@@ -216,15 +229,17 @@ class TestHappyPath:
     def test_copied_logged_in_action_log(
         self, dirs: dict[str, Path], config: PhotoMindConfig, chroma_mock: MagicMock
     ) -> None:
-        fake_file = _make_jpeg(dirs["tmp"])
+        fake_file = _make_jpeg(dirs["source"])
 
         with (
-            patch(f"{RCLONE_PATCH}.download_file", side_effect=_make_download_mock(fake_file, dirs)),
+            patch(
+                f"{RCLONE_PATCH}.download_file",
+                side_effect=_make_download_mock(fake_file),
+            ),
             patch(f"{RCLONE_PATCH}.upload_file"),
             patch(f"{CLIP_PATCH}.embed_image", return_value=[0.1] * 512),
             patch(f"{CLIP_PATCH}.insert_to_chroma"),
-            patch(f"{CLIP_PATCH}.zero_shot_label", return_value=[]),
-            patch(f"{GEO_PATCH}.reverse_geocode", return_value={"city": "", "state": "", "country": ""}),
+            patch(f"{GEO_PATCH}.reverse_geocode", return_value=_GEO_EMPTY),
         ):
             process_photo(
                 config=config,
@@ -241,16 +256,18 @@ class TestHappyPath:
     def test_rclone_upload_called_once(
         self, dirs: dict[str, Path], config: PhotoMindConfig, chroma_mock: MagicMock
     ) -> None:
-        fake_file = _make_jpeg(dirs["tmp"])
+        fake_file = _make_jpeg(dirs["source"])
         upload_mock = MagicMock()
 
         with (
-            patch(f"{RCLONE_PATCH}.download_file", side_effect=_make_download_mock(fake_file, dirs)),
+            patch(
+                f"{RCLONE_PATCH}.download_file",
+                side_effect=_make_download_mock(fake_file),
+            ),
             patch(f"{RCLONE_PATCH}.upload_file", upload_mock),
             patch(f"{CLIP_PATCH}.embed_image", return_value=[0.1] * 512),
             patch(f"{CLIP_PATCH}.insert_to_chroma"),
-            patch(f"{CLIP_PATCH}.zero_shot_label", return_value=[]),
-            patch(f"{GEO_PATCH}.reverse_geocode", return_value={"city": "", "state": "", "country": ""}),
+            patch(f"{GEO_PATCH}.reverse_geocode", return_value=_GEO_EMPTY),
         ):
             process_photo(
                 config=config,
@@ -267,15 +284,17 @@ class TestHappyPath:
     def test_clip_indexed_set_true(
         self, dirs: dict[str, Path], config: PhotoMindConfig, chroma_mock: MagicMock
     ) -> None:
-        fake_file = _make_jpeg(dirs["tmp"])
+        fake_file = _make_jpeg(dirs["source"])
 
         with (
-            patch(f"{RCLONE_PATCH}.download_file", side_effect=_make_download_mock(fake_file, dirs)),
+            patch(
+                f"{RCLONE_PATCH}.download_file",
+                side_effect=_make_download_mock(fake_file),
+            ),
             patch(f"{RCLONE_PATCH}.upload_file"),
             patch(f"{CLIP_PATCH}.embed_image", return_value=[0.1] * 512),
             patch(f"{CLIP_PATCH}.insert_to_chroma"),
-            patch(f"{CLIP_PATCH}.zero_shot_label", return_value=[]),
-            patch(f"{GEO_PATCH}.reverse_geocode", return_value={"city": "", "state": "", "country": ""}),
+            patch(f"{GEO_PATCH}.reverse_geocode", return_value=_GEO_EMPTY),
         ):
             photo_id = process_photo(
                 config=config,
@@ -294,15 +313,17 @@ class TestHappyPath:
     def test_tmp_file_cleaned_up_after_success(
         self, dirs: dict[str, Path], config: PhotoMindConfig, chroma_mock: MagicMock
     ) -> None:
-        fake_file = _make_jpeg(dirs["tmp"])
+        fake_file = _make_jpeg(dirs["source"])
 
         with (
-            patch(f"{RCLONE_PATCH}.download_file", side_effect=_make_download_mock(fake_file, dirs)),
+            patch(
+                f"{RCLONE_PATCH}.download_file",
+                side_effect=_make_download_mock(fake_file),
+            ),
             patch(f"{RCLONE_PATCH}.upload_file"),
             patch(f"{CLIP_PATCH}.embed_image", return_value=[0.1] * 512),
             patch(f"{CLIP_PATCH}.insert_to_chroma"),
-            patch(f"{CLIP_PATCH}.zero_shot_label", return_value=[]),
-            patch(f"{GEO_PATCH}.reverse_geocode", return_value={"city": "", "state": "", "country": ""}),
+            patch(f"{GEO_PATCH}.reverse_geocode", return_value=_GEO_EMPTY),
         ):
             process_photo(
                 config=config,
@@ -332,15 +353,17 @@ class TestMemeBailOut:
         self, dirs: dict[str, Path], config: PhotoMindConfig, chroma_mock: MagicMock
     ) -> None:
         # WhatsApp software → high meme signal
-        fake_file = _make_jpeg(dirs["tmp"], software="WhatsApp")
+        fake_file = _make_jpeg(dirs["source"], software="WhatsApp")
 
         with (
-            patch(f"{RCLONE_PATCH}.download_file", side_effect=_make_download_mock(fake_file, dirs)),
+            patch(
+                f"{RCLONE_PATCH}.download_file",
+                side_effect=_make_download_mock(fake_file),
+            ),
             patch(f"{RCLONE_PATCH}.upload_file") as upload_mock,
             patch(f"{CLIP_PATCH}.embed_image", return_value=[0.1] * 512),
             patch(f"{CLIP_PATCH}.insert_to_chroma"),
-            patch(f"{CLIP_PATCH}.zero_shot_label", return_value=[]),
-            patch(f"{GEO_PATCH}.reverse_geocode", return_value={"city": "", "state": "", "country": ""}),
+            patch(f"{GEO_PATCH}.reverse_geocode", return_value=_GEO_EMPTY),
         ):
             photo_id = process_photo(
                 config=config,
@@ -361,15 +384,17 @@ class TestMemeBailOut:
     def test_meme_logged_in_action_log(
         self, dirs: dict[str, Path], config: PhotoMindConfig, chroma_mock: MagicMock
     ) -> None:
-        fake_file = _make_jpeg(dirs["tmp"], software="WhatsApp")
+        fake_file = _make_jpeg(dirs["source"], software="WhatsApp")
 
         with (
-            patch(f"{RCLONE_PATCH}.download_file", side_effect=_make_download_mock(fake_file, dirs)),
+            patch(
+                f"{RCLONE_PATCH}.download_file",
+                side_effect=_make_download_mock(fake_file),
+            ),
             patch(f"{RCLONE_PATCH}.upload_file"),
             patch(f"{CLIP_PATCH}.embed_image", return_value=[0.1] * 512),
             patch(f"{CLIP_PATCH}.insert_to_chroma"),
-            patch(f"{CLIP_PATCH}.zero_shot_label", return_value=[]),
-            patch(f"{GEO_PATCH}.reverse_geocode", return_value={"city": "", "state": "", "country": ""}),
+            patch(f"{GEO_PATCH}.reverse_geocode", return_value=_GEO_EMPTY),
         ):
             process_photo(
                 config=config,
@@ -392,7 +417,7 @@ class TestDedupBailOut:
     def test_duplicate_status_is_done(
         self, dirs: dict[str, Path], config: PhotoMindConfig, chroma_mock: MagicMock
     ) -> None:
-        fake_file = _make_jpeg(dirs["tmp"])
+        fake_file = _make_jpeg(dirs["source"])
 
         # Pre-compute the phash of our test image so we can inject it as "known"
         from photomind.services.dedup import compute_phash
@@ -400,12 +425,14 @@ class TestDedupBailOut:
         phash = compute_phash(fake_file)
 
         with (
-            patch(f"{RCLONE_PATCH}.download_file", side_effect=_make_download_mock(fake_file, dirs)),
+            patch(
+                f"{RCLONE_PATCH}.download_file",
+                side_effect=_make_download_mock(fake_file),
+            ),
             patch(f"{RCLONE_PATCH}.upload_file") as upload_mock,
             patch(f"{CLIP_PATCH}.embed_image", return_value=[0.1] * 512),
             patch(f"{CLIP_PATCH}.insert_to_chroma"),
-            patch(f"{CLIP_PATCH}.zero_shot_label", return_value=[]),
-            patch(f"{GEO_PATCH}.reverse_geocode", return_value={"city": "", "state": "", "country": ""}),
+            patch(f"{GEO_PATCH}.reverse_geocode", return_value=_GEO_EMPTY),
         ):
             photo_id = process_photo(
                 config=config,
@@ -425,18 +452,20 @@ class TestDedupBailOut:
     def test_duplicate_logged_in_action_log(
         self, dirs: dict[str, Path], config: PhotoMindConfig, chroma_mock: MagicMock
     ) -> None:
-        fake_file = _make_jpeg(dirs["tmp"])
+        fake_file = _make_jpeg(dirs["source"])
         from photomind.services.dedup import compute_phash
 
         phash = compute_phash(fake_file)
 
         with (
-            patch(f"{RCLONE_PATCH}.download_file", side_effect=_make_download_mock(fake_file, dirs)),
+            patch(
+                f"{RCLONE_PATCH}.download_file",
+                side_effect=_make_download_mock(fake_file),
+            ),
             patch(f"{RCLONE_PATCH}.upload_file"),
             patch(f"{CLIP_PATCH}.embed_image", return_value=[0.1] * 512),
             patch(f"{CLIP_PATCH}.insert_to_chroma"),
-            patch(f"{CLIP_PATCH}.zero_shot_label", return_value=[]),
-            patch(f"{GEO_PATCH}.reverse_geocode", return_value={"city": "", "state": "", "country": ""}),
+            patch(f"{GEO_PATCH}.reverse_geocode", return_value=_GEO_EMPTY),
         ):
             process_photo(
                 config=config,
@@ -504,15 +533,17 @@ class TestErrorHandling:
     def test_unhandled_error_marks_photo_as_error(
         self, dirs: dict[str, Path], config: PhotoMindConfig, chroma_mock: MagicMock
     ) -> None:
-        fake_file = _make_jpeg(dirs["tmp"])
+        fake_file = _make_jpeg(dirs["source"])
 
         with (
-            patch(f"{RCLONE_PATCH}.download_file", side_effect=_make_download_mock(fake_file, dirs)),
+            patch(
+                f"{RCLONE_PATCH}.download_file",
+                side_effect=_make_download_mock(fake_file),
+            ),
             patch(f"{RCLONE_PATCH}.upload_file"),
             patch(f"{CLIP_PATCH}.embed_image", side_effect=RuntimeError("GPU OOM")),
             patch(f"{CLIP_PATCH}.insert_to_chroma"),
-            patch(f"{CLIP_PATCH}.zero_shot_label", return_value=[]),
-            patch(f"{GEO_PATCH}.reverse_geocode", return_value={"city": "", "state": "", "country": ""}),
+            patch(f"{GEO_PATCH}.reverse_geocode", return_value=_GEO_EMPTY),
         ):
             photo_id = process_photo(
                 config=config,
@@ -537,15 +568,17 @@ class TestReturnValue:
     def test_returns_photo_uuid(
         self, dirs: dict[str, Path], config: PhotoMindConfig, chroma_mock: MagicMock
     ) -> None:
-        fake_file = _make_jpeg(dirs["tmp"])
+        fake_file = _make_jpeg(dirs["source"])
 
         with (
-            patch(f"{RCLONE_PATCH}.download_file", side_effect=_make_download_mock(fake_file, dirs)),
+            patch(
+                f"{RCLONE_PATCH}.download_file",
+                side_effect=_make_download_mock(fake_file),
+            ),
             patch(f"{RCLONE_PATCH}.upload_file"),
             patch(f"{CLIP_PATCH}.embed_image", return_value=[0.1] * 512),
             patch(f"{CLIP_PATCH}.insert_to_chroma"),
-            patch(f"{CLIP_PATCH}.zero_shot_label", return_value=[]),
-            patch(f"{GEO_PATCH}.reverse_geocode", return_value={"city": "", "state": "", "country": ""}),
+            patch(f"{GEO_PATCH}.reverse_geocode", return_value=_GEO_EMPTY),
         ):
             photo_id = process_photo(
                 config=config,
