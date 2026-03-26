@@ -42,7 +42,7 @@ def _sha4(content: bytes) -> str:
 CONTENT = b"fake image data"
 SALT = _sha4(CONTENT)  # deterministic salt for this content
 
-DATE_2024 = 1735138222  # 2024-12-25 14:30:22 UTC
+DATE_2024 = 1735137022  # 2024-12-25 14:30:22 UTC
 
 
 # ─── TestRenameResult ─────────────────────────────────────────────────────────
