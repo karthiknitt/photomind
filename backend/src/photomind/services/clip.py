@@ -109,7 +109,10 @@ def insert_to_chroma(
     embedding: list[float],
     metadata: dict[str, Any] | None = None,
 ) -> None:
-    """Insert a photo embedding into a ChromaDB collection.
+    """Insert or update a photo embedding in a ChromaDB collection.
+
+    Uses upsert semantics so the pipeline is safe to retry — re-inserting the same
+    photo_id overwrites the existing record rather than raising a duplicate error.
 
     Args:
         collection: a chromadb Collection object.
