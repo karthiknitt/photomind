@@ -1,9 +1,9 @@
 # PhotoMind — Project Status
 
-_Last updated: 2026-03-26 by Claude (Sprint 2.2 complete, PRs #10 and #11 merged)_
+_Last updated: 2026-03-26 by Claude (Sprint 2.3 in progress, feat/sprint-2.3 branch)_
 
 ## Current Phase & Sprint
-Phase 2 — AI Intelligence / Sprint 2.2 COMPLETE (PRs #10 and #11 merged) → Sprint 2.3 next
+Phase 2 — AI Intelligence / Sprint 2.3 IN PROGRESS (feat/sprint-2.3 branch, PR pending)
 
 ## Overall Progress
 - [x] Phase 0 — Bootstrap ← COMPLETE
@@ -17,6 +17,11 @@ Phase 2 — AI Intelligence / Sprint 2.2 COMPLETE (PRs #10 and #11 merged) → S
 - [x] T2.1 — Geo service: reverse_geocoder offline geocoding (PR #9 merged)
 - [x] T2.2 — Rename service: generate final filename from metadata (PR #10 merged)
 - [x] T2.2 — Core pipeline: orchestrate all 15 stages (PR #11 merged)
+- [ ] T2.3 — Meme fix: WhatsApp downgraded to MEDIUM signal + filename pattern detection (PR pending)
+- [ ] T2.3 — Daemon: run_scan() scans all sources, filters known paths, processes new images
+- [ ] T2.3 — Scheduler: run_forever() periodic loop, clean KeyboardInterrupt shutdown
+- [ ] T2.3 — SystemD service file: deploy/photomind-daemon.service
+- [ ] T2.3 — Worker entry point: python -m photomind.worker [--scan-once] [--config PATH]
 
 ## Phase 1 Task Status
 - [x] T1.1 — DB Schema: Drizzle migrations, 24 integration tests (PR #1 merged)
@@ -56,6 +61,25 @@ Phase 2 — AI Intelligence / Sprint 2.2 COMPLETE (PRs #10 and #11 merged) → S
 | feat/rename-service | T2.2 rename + photos_db | merged | #10 |
 | feat/pipeline | T2.2 core pipeline | merged | #11 |
 
+## Completed This Session (Sprint 2.3)
+- meme.py: WhatsApp EXIF software downgraded HIGH→MEDIUM; new `_check_whatsapp_filename()`
+  MEDIUM signal detects IMG-YYYYMMDD-WA####.jpg, VID-…, "WhatsApp Image …" patterns
+  - Genuine family photos shared via WhatsApp no longer falsely classified as memes
+  - 45 tests, 97% coverage; `check_meme()` gains `filename` kwarg
+- photos_db.py: `get_processed_source_paths()` returns set[(remote, path)] for daemon skip logic
+- rclone.py: `list_files()` gains `recursive=True` flag (passes --recursive to rclone lsjson)
+- daemon.py: `run_scan()` — scans all sources, skips known paths, calls process_photo per new image
+  - `_is_image()` helper filters by extension (.jpg/.jpeg/.png/.heic/.heif/.tiff/.webp/.bmp/.gif)
+  - RcloneError per-source is logged + skipped; other sources continue
+  - 21 tests, 100% coverage
+- scheduler.py: `run_forever()` — periodic loop, sleeps scan_interval_seconds between scans
+  - Transient scan errors logged + retried; KeyboardInterrupt exits cleanly
+  - 6 tests, 86% coverage
+- worker/__main__.py: entry point `python -m photomind.worker`
+  - Flags: --config PATH, --scan-once, --verbose
+- deploy/photomind-daemon.service: systemd service file for VPS
+- Full suite: 358 tests passing, 92.40% coverage
+
 ## Completed This Session (Sprint 2.2)
 - rename.py: generate_filename with SHA256 salt, date prefix, optional segments (city/persons/camera),
   sanitization (spaces→hyphens), 200-char truncation, collision handling (_v2/_v3)
@@ -83,7 +107,7 @@ Phase 2 — AI Intelligence / Sprint 2.2 COMPLETE (PRs #10 and #11 merged) → S
 | Suite | Passing | Failing | Coverage |
 |---|---|---|---|
 | frontend (bun test) | 28 | 0 | — |
-| backend (pytest) on main | 307 | 0 | 94.87% |
+| backend (pytest) on feat/sprint-2.3 | 358 | 0 | 92.40% |
 
 ## Environment Notes
 - VPS: configure SSH + Tailscale IP in `config.yaml` (gitignored)
@@ -105,8 +129,8 @@ cd backend && uv run pytest
 ```
 
 ## Next Session Should
-Sprint 2.3 (Phase 2 completion):
-1. Worker daemon (`worker/daemon.py`) — asyncio loop, scan OneDrive, call process_photo() per batch
-2. Scheduler (`worker/scheduler.py`) — periodic scan + face-cluster trigger
-3. SystemD service file for VPS deployment
-4. Optional: basic HTTP health-check endpoint for daemon status
+Sprint 3.1 (Phase 3 start — parallel work):
+1. Face service (`services/face.py`) — InsightFace buffalo_sc CPU, detect + embed faces
+2. Gallery API (`app/api/photos/route.ts`) — paginated photo list from SQLite
+3. Search API (`app/api/search/route.ts`) — hybrid text + CLIP semantic search
+   (see plan.md Sprint 3.1 for details)

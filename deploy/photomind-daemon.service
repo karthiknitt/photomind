@@ -1,0 +1,30 @@
+[Unit]
+Description=PhotoMind background processing daemon
+Documentation=https://github.com/karthiknitt/photomind
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=karthik
+WorkingDirectory=/home/karthik/projects/PhotoMind/backend
+
+# Run via uv so the virtual environment is always current
+ExecStart=/home/karthik/.local/bin/uv run python -m photomind.worker --config /home/karthik/photomind/config.yaml
+
+# Restart on failure; back off to avoid hammering OneDrive on auth errors
+Restart=on-failure
+RestartSec=60s
+StartLimitInterval=600s
+StartLimitBurst=5
+
+# Logging — journalctl -u photomind-daemon -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=photomind-daemon
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

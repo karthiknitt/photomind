@@ -352,8 +352,10 @@ class TestMemeBailOut:
     def test_meme_photo_status_is_done(
         self, dirs: dict[str, Path], config: PhotoMindConfig, chroma_mock: MagicMock
     ) -> None:
-        # WhatsApp software → high meme signal
-        fake_file = _make_jpeg(dirs["source"], software="WhatsApp")
+        # WA filename pattern (MEDIUM) + WhatsApp software (MEDIUM) = 2 signals → meme
+        fake_file = _make_jpeg(
+            dirs["source"], name="IMG-20240101-WA0001.jpg", software="WhatsApp"
+        )
 
         with (
             patch(
@@ -368,7 +370,7 @@ class TestMemeBailOut:
             photo_id = process_photo(
                 config=config,
                 source_remote="onedrive_karthik",
-                source_path="/Pictures/2024/IMG_001.jpg",
+                source_path="/Pictures/2024/IMG-20240101-WA0001.jpg",
                 db_path=dirs["db"],
                 chroma_collection=chroma_mock,
                 known_phashes=set(),
@@ -384,7 +386,10 @@ class TestMemeBailOut:
     def test_meme_logged_in_action_log(
         self, dirs: dict[str, Path], config: PhotoMindConfig, chroma_mock: MagicMock
     ) -> None:
-        fake_file = _make_jpeg(dirs["source"], software="WhatsApp")
+        # WA filename pattern (MEDIUM) + WhatsApp software (MEDIUM) = 2 signals → meme
+        fake_file = _make_jpeg(
+            dirs["source"], name="IMG-20240101-WA0001.jpg", software="WhatsApp"
+        )
 
         with (
             patch(
@@ -399,7 +404,7 @@ class TestMemeBailOut:
             process_photo(
                 config=config,
                 source_remote="onedrive_karthik",
-                source_path="/Pictures/2024/IMG_001.jpg",
+                source_path="/Pictures/2024/IMG-20240101-WA0001.jpg",
                 db_path=dirs["db"],
                 chroma_collection=chroma_mock,
                 known_phashes=set(),
