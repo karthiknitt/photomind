@@ -13,12 +13,15 @@ Coverage:
 
 from __future__ import annotations
 
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
+# Short aliases for long patch target strings (keeps lines under 88 chars)
+_EMBED = "photomind.bridge.main.embed_text"
+_QUERY = "photomind.bridge.main.query_similar"
+_CHROMA = "photomind.bridge.main.get_chroma_collection"
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -48,13 +51,9 @@ class TestSearchEndpoint:
         fake_results = [{"id": "abc", "distance": 0.1, "metadata": {}}]
 
         with (
-            patch(
-                "photomind.bridge.main.embed_text", return_value=fake_embedding
-            ),
-            patch(
-                "photomind.bridge.main.query_similar", return_value=fake_results
-            ),
-            patch("photomind.bridge.main.get_chroma_collection", return_value=MagicMock()),
+            patch("photomind.bridge.main.embed_text", return_value=fake_embedding),
+            patch("photomind.bridge.main.query_similar", return_value=fake_results),
+            patch(_CHROMA, return_value=MagicMock()),
         ):
             response = client.get("/search", params={"q": "dogs"})
 
@@ -71,9 +70,9 @@ class TestSearchEndpoint:
         ]
 
         with (
-            patch("photomind.bridge.main.embed_text", return_value=fake_embedding),
-            patch("photomind.bridge.main.query_similar", return_value=fake_results),
-            patch("photomind.bridge.main.get_chroma_collection", return_value=MagicMock()),
+            patch(_EMBED, return_value=fake_embedding),
+            patch(_QUERY, return_value=fake_results),
+            patch(_CHROMA, return_value=MagicMock()),
         ):
             response = client.get("/search", params={"q": "mountains"})
 
@@ -86,7 +85,7 @@ class TestSearchEndpoint:
             assert isinstance(r["distance"], float)
 
     def test_search_empty_query_returns_400(self, client: TestClient) -> None:
-        """GET /search with an empty q param returns 422 (FastAPI Query min_length=1)."""
+        """GET /search with empty q returns 422 (FastAPI Query min_length=1)."""
         response = client.get("/search", params={"q": ""})
         # FastAPI Query(min_length=1) triggers 422 Unprocessable Entity
         assert response.status_code == 422
@@ -97,15 +96,16 @@ class TestSearchEndpoint:
         mock_query = MagicMock(return_value=[])
 
         with (
-            patch("photomind.bridge.main.embed_text", return_value=fake_embedding),
-            patch("photomind.bridge.main.query_similar", mock_query),
-            patch("photomind.bridge.main.get_chroma_collection", return_value=MagicMock()),
+            patch(_EMBED, return_value=fake_embedding),
+            patch(_QUERY, mock_query),
+            patch(_CHROMA, return_value=MagicMock()),
         ):
             client.get("/search", params={"q": "test"})
 
         mock_query.assert_called_once()
         _, call_kwargs = mock_query.call_args
-        assert call_kwargs.get("n_results", None) == 20 or mock_query.call_args[0][2] == 20  # type: ignore[index]
+        actual_n = call_kwargs.get("n_results") or mock_query.call_args[0][2]  # type: ignore[index]
+        assert actual_n == 20
 
     def test_search_custom_n(self, client: TestClient) -> None:
         """GET /search?q=test&n=5 passes n_results=5 to query_similar."""
@@ -113,9 +113,9 @@ class TestSearchEndpoint:
         mock_query = MagicMock(return_value=[])
 
         with (
-            patch("photomind.bridge.main.embed_text", return_value=fake_embedding),
-            patch("photomind.bridge.main.query_similar", mock_query),
-            patch("photomind.bridge.main.get_chroma_collection", return_value=MagicMock()),
+            patch(_EMBED, return_value=fake_embedding),
+            patch(_QUERY, mock_query),
+            patch(_CHROMA, return_value=MagicMock()),
         ):
             response = client.get("/search", params={"q": "test", "n": 5})
 
@@ -123,7 +123,7 @@ class TestSearchEndpoint:
         mock_query.assert_called_once()
         # n_results could be positional or keyword
         args, kwargs = mock_query.call_args
-        n_results = kwargs.get("n_results") if kwargs.get("n_results") is not None else args[2]
+        n_results = kwargs.get("n_results") or args[2]
         assert n_results == 5
 
     def test_health_returns_ok(self, client: TestClient) -> None:
@@ -137,9 +137,9 @@ class TestSearchEndpoint:
         fake_embedding = [0.1] * 512
 
         with (
-            patch("photomind.bridge.main.embed_text", return_value=fake_embedding),
-            patch("photomind.bridge.main.query_similar", return_value=[]),
-            patch("photomind.bridge.main.get_chroma_collection", return_value=MagicMock()),
+            patch(_EMBED, return_value=fake_embedding),
+            patch(_QUERY, return_value=[]),
+            patch(_CHROMA, return_value=MagicMock()),
         ):
             response = client.get("/search", params={"q": "dogs"})
 
@@ -154,9 +154,9 @@ class TestSearchEndpoint:
         fake_results = [{"id": "x1", "distance": 0.05, "metadata": {}}]
 
         with (
-            patch("photomind.bridge.main.embed_text", return_value=fake_embedding),
-            patch("photomind.bridge.main.query_similar", return_value=fake_results),
-            patch("photomind.bridge.main.get_chroma_collection", return_value=MagicMock()),
+            patch(_EMBED, return_value=fake_embedding),
+            patch(_QUERY, return_value=fake_results),
+            patch(_CHROMA, return_value=MagicMock()),
         ):
             response = client.get("/search", params={"q": "sunset"})
 
@@ -228,7 +228,10 @@ class TestEmbedText:
         clip_mod._preprocess = None
         clip_mod._tokenizer = None
 
-        with patch("open_clip.create_model_and_transforms"), patch("open_clip.get_tokenizer"):
+        with (
+            patch("open_clip.create_model_and_transforms"),
+            patch("open_clip.get_tokenizer"),
+        ):
             from photomind.services.clip import embed_text
 
             with pytest.raises(ValueError, match="non-empty"):
@@ -246,7 +249,10 @@ class TestEmbedText:
         clip_mod._preprocess = None
         clip_mod._tokenizer = None
 
-        with patch("open_clip.create_model_and_transforms"), patch("open_clip.get_tokenizer"):
+        with (
+            patch("open_clip.create_model_and_transforms"),
+            patch("open_clip.get_tokenizer"),
+        ):
             from photomind.services.clip import embed_text
 
             with pytest.raises(ValueError, match="non-empty"):
