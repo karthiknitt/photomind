@@ -1,22 +1,22 @@
 # PhotoMind — Project Status
 
-_Last updated: 2026-03-26 by Claude (Sprint 2.1 complete, both PRs merged)_
+_Last updated: 2026-03-26 by Claude (Sprint 2.2 complete, PRs #10 and #11 merged)_
 
 ## Current Phase & Sprint
-Phase 2 — AI Intelligence / Sprint 2.1 COMPLETE (PRs #8 and #9 merged) → Sprint 2.2 next
+Phase 2 — AI Intelligence / Sprint 2.2 COMPLETE (PRs #10 and #11 merged) → Sprint 2.3 next
 
 ## Overall Progress
 - [x] Phase 0 — Bootstrap ← COMPLETE
 - [x] Phase 1 — Data Foundation ← COMPLETE (all PRs merged)
-- [ ] Phase 2 — AI Intelligence ← IN PROGRESS (Sprint 2.1 done, Sprint 2.2 next)
+- [ ] Phase 2 — AI Intelligence ← IN PROGRESS (Sprints 2.1 + 2.2 done)
 - [ ] Phase 3 — Faces + API + UI
 - [ ] Phase 4 — Full UI + Deploy
 
 ## Phase 2 Task Status
 - [x] T2.1 — CLIP service: open_clip ViT-B/32 + ChromaDB (PR #8 merged)
 - [x] T2.1 — Geo service: reverse_geocoder offline geocoding (PR #9 merged)
-- [ ] T2.2 — Rename service: generate final filename from metadata
-- [ ] T2.2 — Core pipeline: orchestrate all 15 stages
+- [x] T2.2 — Rename service: generate final filename from metadata (PR #10 merged)
+- [x] T2.2 — Core pipeline: orchestrate all 15 stages (PR #11 merged)
 
 ## Phase 1 Task Status
 - [x] T1.1 — DB Schema: Drizzle migrations, 24 integration tests (PR #1 merged)
@@ -53,19 +53,21 @@ Phase 2 — AI Intelligence / Sprint 2.1 COMPLETE (PRs #8 and #9 merged) → Spr
 | feat/meme-detector | T1.3 meme | merged | #7 |
 | feat/clip-service | T2.1 CLIP | merged | #8 |
 | feat/geo-service | T2.1 Geo | merged | #9 |
+| feat/rename-service | T2.2 rename + photos_db | merged | #10 |
+| feat/pipeline | T2.2 core pipeline | merged | #11 |
 
-## Completed This Session
-- Sprint 2.1: CLIP service + Geo service (TDD, both reviewed)
-- clip.py: embed_image, insert_to_chroma, query_similar, zero_shot_label, get_chroma_collection
-  - open_clip ViT-B/32 float16 CPU singleton (thread-safe double-checked locking)
-  - ChromaDB upsert semantics (retry-safe); empty collection safe (clamps n_results)
-  - 31 tests (all mocked — no 300MB model in CI), clip.py 100% coverage
-- geo.py: reverse_geocode, batch_reverse_geocode (offline, reverse_geocoder library)
-  - Validates lat/lon, batch uses single search() call, empty-result guard
-  - 25 tests using real coordinates (Chennai, London, NYC verified)
-- open-clip-torch, chromadb, reverse_geocoder added as dependencies
-- 212 tests on clip branch, 238 on geo branch (includes clip+geo); both PRs merged to main
-- CodeRabbit fixes applied: `or ""` null guard in geo, E501 line length fixes, RuntimeError docstring
+## Completed This Session (Sprint 2.2)
+- rename.py: generate_filename with SHA256 salt, date prefix, optional segments (city/persons/camera),
+  sanitization (spaces→hyphens), 200-char truncation, collision handling (_v2/_v3)
+  - 35 tests, 99% coverage
+- photos_db.py: create_photo, update_photo (dynamic SET clause), get_phashes, get_existing_filenames
+  - WAL + FK-off sqlite3; _open() now a @contextmanager (closes conn in finally)
+  - 19 tests, 99% coverage
+- pipeline.py: process_photo() 15-stage orchestrator
+  - _BailOut sentinel for meme/dedup bail-outs; all bail-outs set status=DONE
+  - Intra-batch dedup: known_phashes.add(phash) after each successful photo
+  - 15 integration tests (real SQLite, mocked rclone/CLIP/geo), 91% coverage
+- Full suite: 307 tests passing, 94.87% coverage
 
 ## Blocked / Needs Attention
 - Branch protection skipped (GitHub free plan limitation for private repos).
@@ -81,7 +83,7 @@ Phase 2 — AI Intelligence / Sprint 2.1 COMPLETE (PRs #8 and #9 merged) → Spr
 | Suite | Passing | Failing | Coverage |
 |---|---|---|---|
 | frontend (bun test) | 28 | 0 | — |
-| backend (pytest) on main | 238 | 0 | 94% |
+| backend (pytest) on main | 307 | 0 | 94.87% |
 
 ## Environment Notes
 - VPS: configure SSH + Tailscale IP in `config.yaml` (gitignored)
@@ -103,7 +105,8 @@ cd backend && uv run pytest
 ```
 
 ## Next Session Should
-1. Sprint 2.2: Two services in sequence:
-   - feat/rename-service: generate final filename (YYYY-MM-DD_HHMMSS_City_Person_Model_hash.ext)
-   - feat/pipeline: orchestrate all 15 stages end-to-end
-2. Each in its own worktree, TDD cycle
+Sprint 2.3 (Phase 2 completion):
+1. Worker daemon (`worker/daemon.py`) — asyncio loop, scan OneDrive, call process_photo() per batch
+2. Scheduler (`worker/scheduler.py`) — periodic scan + face-cluster trigger
+3. SystemD service file for VPS deployment
+4. Optional: basic HTTP health-check endpoint for daemon status
