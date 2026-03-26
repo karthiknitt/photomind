@@ -169,6 +169,8 @@ def detect(
     import cv2  # opencv-python-headless bundled with insightface
 
     img_bgr = cv2.imread(str(path))
+    if img_bgr is None:
+        raise ValueError(f"Failed to read image: {path}")
     app = _get_app()
     raw_faces = app.get(img_bgr)
 

@@ -25,7 +25,6 @@ import numpy as np
 import pytest
 from PIL import Image
 
-
 # ---------------------------------------------------------------------------
 # Helpers — build fake InsightFace face objects
 # ---------------------------------------------------------------------------
@@ -177,7 +176,8 @@ class TestStoreFaces:
             conn = sqlite3.connect(str(db_path))
             try:
                 count = conn.execute(
-                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='faces'"
+                    "SELECT COUNT(*) FROM sqlite_master "
+                    "WHERE type='table' AND name='faces'"
                 ).fetchone()[0]
                 if count:
                     row_count = conn.execute("SELECT COUNT(*) FROM faces").fetchone()[0]
@@ -185,7 +185,9 @@ class TestStoreFaces:
             finally:
                 conn.close()
 
-    def test_store_faces_inserts_sqlite_row(self, tmp_path: Path, face_mod: Any) -> None:
+    def test_store_faces_inserts_sqlite_row(  # noqa: E501
+        self, tmp_path: Path, face_mod: Any
+    ) -> None:
         from photomind.services.face import FaceDetection, store_faces
 
         db_path = tmp_path / "faces.db"
@@ -209,7 +211,8 @@ class TestStoreFaces:
         conn = sqlite3.connect(str(db_path))
         try:
             row = conn.execute(
-                "SELECT id, photo_id, bbox_x, bbox_y, bbox_w, bbox_h, det_score, cluster_id "
+                "SELECT id, photo_id, bbox_x, bbox_y, "
+                "bbox_w, bbox_h, det_score, cluster_id "
                 "FROM faces WHERE id = ?",
                 (face_id,),
             ).fetchone()
@@ -296,14 +299,19 @@ class TestStoreFaces:
         # Check SQLite rows
         conn = sqlite3.connect(str(db_path))
         try:
-            count = conn.execute("SELECT COUNT(*) FROM faces WHERE photo_id = ?", (photo_id,)).fetchone()[0]
+            count = conn.execute(
+                "SELECT COUNT(*) FROM faces WHERE photo_id = ?",
+                (photo_id,),
+            ).fetchone()[0]
         finally:
             conn.close()
 
         assert count == 2
         assert fake_collection.count() == 2
 
-    def test_store_faces_cluster_id_is_null(self, tmp_path: Path, face_mod: Any) -> None:
+    def test_store_faces_cluster_id_is_null(  # noqa: E501
+        self, tmp_path: Path, face_mod: Any
+    ) -> None:
         from photomind.services.face import FaceDetection, store_faces
 
         db_path = tmp_path / "faces.db"
@@ -351,7 +359,7 @@ class TestStoreFaces:
 
 class TestSingleton:
     def test_singleton_is_loaded_once(self, sample_image: Path, face_mod: Any) -> None:
-        """FaceAnalysis() is instantiated exactly once across multiple _get_app() calls."""
+        """FaceAnalysis() instantiated exactly once across multiple _get_app() calls."""
         mock_app = _make_mock_app([])
         mock_face_analysis_class = MagicMock(return_value=mock_app)
 
