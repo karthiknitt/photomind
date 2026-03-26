@@ -90,7 +90,7 @@ describe("TestDefaultBehavior", () => {
 
   afterEach(() => {
     testSqlite.close();
-    vi.resetModules();
+
   });
 
   it("returns 200 with photos array and pagination", async () => {
@@ -162,7 +162,7 @@ describe("TestPagination", () => {
 
   afterEach(() => {
     testSqlite.close();
-    vi.resetModules();
+
   });
 
   it("paginates correctly", async () => {
@@ -219,7 +219,7 @@ describe("TestFiltering", () => {
 
   afterEach(() => {
     testSqlite.close();
-    vi.resetModules();
+
   });
 
   it("filters by status", async () => {
@@ -273,7 +273,7 @@ describe("TestSorting", () => {
 
   afterEach(() => {
     testSqlite.close();
-    vi.resetModules();
+
   });
 
   it("sorts by dateTaken desc", async () => {
@@ -305,7 +305,7 @@ describe("TestErrors", () => {
 
   afterEach(() => {
     testSqlite.close();
-    vi.resetModules();
+
   });
 
   it("returns 400 for non-integer page", async () => {
