@@ -16,6 +16,7 @@ Coverage:
 from __future__ import annotations
 
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -301,8 +302,9 @@ class TestQuerySimilar:
     def test_result_has_required_keys(self, chroma_collection: Any) -> None:
         from photomind.services.clip import query_similar
 
+        emb = [0.5] * FAKE_EMBEDDING_DIM
         self._seed_collection(chroma_collection, 5)
-        results = query_similar(chroma_collection, [0.5] * FAKE_EMBEDDING_DIM, n_results=1)
+        results = query_similar(chroma_collection, emb, n_results=1)
         assert len(results) >= 1
         assert "id" in results[0]
         assert "distance" in results[0]
@@ -311,29 +313,33 @@ class TestQuerySimilar:
     def test_respects_n_results(self, chroma_collection: Any) -> None:
         from photomind.services.clip import query_similar
 
+        emb = [0.5] * FAKE_EMBEDDING_DIM
         self._seed_collection(chroma_collection, 10)
-        results = query_similar(chroma_collection, [0.5] * FAKE_EMBEDDING_DIM, n_results=4)
+        results = query_similar(chroma_collection, emb, n_results=4)
         assert len(results) == 4
 
     def test_default_n_results_is_10(self, chroma_collection: Any) -> None:
         from photomind.services.clip import query_similar
 
+        emb = [0.5] * FAKE_EMBEDDING_DIM
         self._seed_collection(chroma_collection, 15)
-        results = query_similar(chroma_collection, [0.5] * FAKE_EMBEDDING_DIM)
+        results = query_similar(chroma_collection, emb)
         assert len(results) == 10
 
     def test_distance_is_numeric(self, chroma_collection: Any) -> None:
         from photomind.services.clip import query_similar
 
+        emb = [0.5] * FAKE_EMBEDDING_DIM
         self._seed_collection(chroma_collection, 5)
-        results = query_similar(chroma_collection, [0.5] * FAKE_EMBEDDING_DIM, n_results=3)
+        results = query_similar(chroma_collection, emb, n_results=3)
         for r in results:
             assert isinstance(r["distance"], (int, float))
 
     def test_empty_collection_returns_empty_list(self, chroma_collection: Any) -> None:
         from photomind.services.clip import query_similar
 
-        results = query_similar(chroma_collection, [0.5] * FAKE_EMBEDDING_DIM, n_results=10)
+        emb = [0.5] * FAKE_EMBEDDING_DIM
+        results = query_similar(chroma_collection, emb, n_results=10)
         assert results == []
 
     def test_n_results_larger_than_collection_returns_all(
@@ -341,8 +347,9 @@ class TestQuerySimilar:
     ) -> None:
         from photomind.services.clip import query_similar
 
+        emb = [0.5] * FAKE_EMBEDDING_DIM
         self._seed_collection(chroma_collection, 3)
-        results = query_similar(chroma_collection, [0.5] * FAKE_EMBEDDING_DIM, n_results=100)
+        results = query_similar(chroma_collection, emb, n_results=100)
         assert len(results) == 3
 
 
@@ -471,8 +478,8 @@ class TestGetChromaCollection:
 
 
 class TestModelSingleton:
-    def test_get_model_called_once_on_double_call(self) -> None:
-        """_get_model() must not reload the model on second call."""
+    def test_concurrent_load_calls_create_exactly_once(self) -> None:
+        """Concurrent _get_model() calls must load the model exactly once."""
         mock_model, mock_preprocess, mock_tokenizer = _make_mock_model()
 
         import photomind.services.clip as clip_mod
@@ -488,16 +495,24 @@ class TestModelSingleton:
             ) as mock_create,
             patch("open_clip.get_tokenizer", return_value=mock_tokenizer),
         ):
-            clip_mod._get_model()
-            clip_mod._get_model()
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                futures = [pool.submit(clip_mod._get_model) for _ in range(8)]
+                results = [f.result() for f in futures]
+
             assert mock_create.call_count == 1
+            # All threads must receive the same objects
+            first = results[0]
+            for result in results[1:]:
+                assert result[0] is first[0]
+                assert result[1] is first[1]
+                assert result[2] is first[2]
 
         clip_mod._model = None
         clip_mod._preprocess = None
         clip_mod._tokenizer = None
 
-    def test_get_model_returns_same_objects(self) -> None:
-        """Second call must return the identical cached objects."""
+    def test_concurrent_load_never_returns_partial_triple(self) -> None:
+        """No thread should ever receive (model, None, None) mid-initialization."""
         mock_model, mock_preprocess, mock_tokenizer = _make_mock_model()
 
         import photomind.services.clip as clip_mod
@@ -513,11 +528,14 @@ class TestModelSingleton:
             ),
             patch("open_clip.get_tokenizer", return_value=mock_tokenizer),
         ):
-            first = clip_mod._get_model()
-            second = clip_mod._get_model()
-            assert first[0] is second[0]
-            assert first[1] is second[1]
-            assert first[2] is second[2]
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                futures = [pool.submit(clip_mod._get_model) for _ in range(8)]
+                results = [f.result() for f in futures]
+
+            for model, preprocess, tokenizer in results:
+                assert model is not None, "model must never be None"
+                assert preprocess is not None, "preprocess must never be None"
+                assert tokenizer is not None, "tokenizer must never be None"
 
         clip_mod._model = None
         clip_mod._preprocess = None

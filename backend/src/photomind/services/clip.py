@@ -52,13 +52,19 @@ def _get_model() -> tuple[Any, Any, Any]:
             import open_clip  # imported lazily to allow mocking in tests
 
             logger.info("Loading open_clip ViT-B/32 model (float16, CPU)...")
-            _model, _, _preprocess = open_clip.create_model_and_transforms(
+            # Build into locals first — only publish _model last so the
+            # fast-path guard (_model is not None) is set only after
+            # _preprocess and _tokenizer are fully ready.
+            local_model, _, local_preprocess = open_clip.create_model_and_transforms(
                 "ViT-B-32",
                 pretrained="openai",
             )
-            _model = _model.to("cpu").half()  # float16
-            _model.eval()
-            _tokenizer = open_clip.get_tokenizer("ViT-B-32")
+            local_model = local_model.to("cpu").half()  # float16
+            local_model.eval()
+            local_tokenizer = open_clip.get_tokenizer("ViT-B-32")
+            _preprocess = local_preprocess
+            _tokenizer = local_tokenizer
+            _model = local_model  # sentinel published last
             logger.info("open_clip model loaded and cached.")
 
     return _model, _preprocess, _tokenizer
