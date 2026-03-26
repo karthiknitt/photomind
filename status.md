@@ -1,16 +1,22 @@
 # PhotoMind — Project Status
 
-_Last updated: 2026-03-23 by Claude (Sprint 1.3 agent)_
+_Last updated: 2026-03-26 by Claude (Sprint 2.1 agent)_
 
 ## Current Phase & Sprint
-Phase 1 — Data Foundation / Sprint 1.3 COMPLETE → Phase 2 Sprint 2.1 next
+Phase 2 — AI Intelligence / Sprint 2.1 COMPLETE (PRs #8 and #9 open) → Sprint 2.2 next
 
 ## Overall Progress
 - [x] Phase 0 — Bootstrap ← COMPLETE
 - [x] Phase 1 — Data Foundation ← COMPLETE (all PRs merged)
-- [ ] Phase 2 — AI Intelligence
+- [ ] Phase 2 — AI Intelligence ← IN PROGRESS (Sprint 2.1 done, Sprint 2.2 next)
 - [ ] Phase 3 — Faces + API + UI
 - [ ] Phase 4 — Full UI + Deploy
+
+## Phase 2 Task Status
+- [ ] T2.1 — CLIP service: open_clip ViT-B/32 + ChromaDB (PR #8 open) ← PENDING REVIEW
+- [ ] T2.1 — Geo service: reverse_geocoder offline geocoding (PR #9 open) ← PENDING REVIEW
+- [ ] T2.2 — Rename service: generate final filename from metadata
+- [ ] T2.2 — Core pipeline: orchestrate all 15 stages
 
 ## Phase 1 Task Status
 - [x] T1.1 — DB Schema: Drizzle migrations, 24 integration tests (PR #1 merged)
@@ -45,13 +51,20 @@ Phase 1 — Data Foundation / Sprint 1.3 COMPLETE → Phase 2 Sprint 2.1 next
 | feat/exif-service | T1.2 EXIF | merged | #5 |
 | feat/dedup-service | T1.3 dedup | merged | #6 |
 | feat/meme-detector | T1.3 meme | merged | #7 |
+| feat/clip-service | T2.1 CLIP | open PR | #8 |
+| feat/geo-service | T2.1 Geo | open PR | #9 |
 
 ## Completed This Session
-- Sprint 1.3: Dedup service + Meme detector (both TDD, 52 new tests)
-- dedup.py: compute_phash, compute_sha256, hamming_distance, is_duplicate
-- meme.py: 5-signal classifier (whatsapp, clip, aspect ratio, no-date, file-size)
-- imagehash added as dependency (pHash via ViT-aligned 64-bit hash)
-- All 156 backend tests passing, 92% coverage
+- Sprint 2.1: CLIP service + Geo service (TDD, both reviewed)
+- clip.py: embed_image, insert_to_chroma, query_similar, zero_shot_label, get_chroma_collection
+  - open_clip ViT-B/32 float16 CPU singleton (thread-safe double-checked locking)
+  - ChromaDB upsert semantics (retry-safe); empty collection safe (clamps n_results)
+  - 31 tests (all mocked — no 300MB model in CI), clip.py 100% coverage
+- geo.py: reverse_geocode, batch_reverse_geocode (offline, reverse_geocoder library)
+  - Validates lat/lon, batch uses single search() call, empty-result guard
+  - 25 tests using real coordinates (Chennai, London, NYC verified)
+- open-clip-torch, chromadb, reverse_geocoder added as dependencies
+- 212 tests passing on clip branch, 207 on geo branch, ~94% coverage each
 
 ## Blocked / Needs Attention
 - Branch protection skipped (GitHub free plan limitation for private repos).
@@ -67,7 +80,9 @@ Phase 1 — Data Foundation / Sprint 1.3 COMPLETE → Phase 2 Sprint 2.1 next
 | Suite | Passing | Failing | Coverage |
 |---|---|---|---|
 | frontend (bun test) | 28 | 0 | — |
-| backend (pytest) | 156 | 0 | 92% |
+| backend (pytest) on main | 181 | 0 | 92% |
+| backend on feat/clip-service | 212 | 0 | 94% |
+| backend on feat/geo-service | 207 | 0 | 93% |
 
 ## Environment Notes
 - VPS: configure SSH + Tailscale IP in `config.yaml` (gitignored)
@@ -89,7 +104,8 @@ cd backend && uv run pytest
 ```
 
 ## Next Session Should
-1. Sprint 2.1: Start 2 parallel Phase 2 services:
-   - feat/clip-service: open_clip ViT-B/32 float16 embeddings + ChromaDB insert
-   - feat/geo-service: reverse_geocoder offline GPS→city/state/country
+1. Merge PR #8 (clip-service) and PR #9 (geo-service) after CodeRabbit review
+2. Sprint 2.2: Two services in sequence:
+   - feat/rename-service: generate final filename (YYYY-MM-DD_HHMMSS_City_Person_Model_hash.ext)
+   - feat/pipeline: orchestrate all 15 stages end-to-end
 3. Each in its own worktree, TDD cycle
