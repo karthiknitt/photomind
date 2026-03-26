@@ -1,9 +1,9 @@
 # PhotoMind — Project Status
 
-_Last updated: 2026-03-26 by Claude (Sprint 2.1 agent)_
+_Last updated: 2026-03-26 by Claude (Sprint 2.1 complete, both PRs merged)_
 
 ## Current Phase & Sprint
-Phase 2 — AI Intelligence / Sprint 2.1 COMPLETE (PRs #8 and #9 open) → Sprint 2.2 next
+Phase 2 — AI Intelligence / Sprint 2.1 COMPLETE (PRs #8 and #9 merged) → Sprint 2.2 next
 
 ## Overall Progress
 - [x] Phase 0 — Bootstrap ← COMPLETE
@@ -13,8 +13,8 @@ Phase 2 — AI Intelligence / Sprint 2.1 COMPLETE (PRs #8 and #9 open) → Sprin
 - [ ] Phase 4 — Full UI + Deploy
 
 ## Phase 2 Task Status
-- [ ] T2.1 — CLIP service: open_clip ViT-B/32 + ChromaDB (PR #8 open) ← PENDING REVIEW
-- [ ] T2.1 — Geo service: reverse_geocoder offline geocoding (PR #9 open) ← PENDING REVIEW
+- [x] T2.1 — CLIP service: open_clip ViT-B/32 + ChromaDB (PR #8 merged)
+- [x] T2.1 — Geo service: reverse_geocoder offline geocoding (PR #9 merged)
 - [ ] T2.2 — Rename service: generate final filename from metadata
 - [ ] T2.2 — Core pipeline: orchestrate all 15 stages
 
@@ -51,8 +51,8 @@ Phase 2 — AI Intelligence / Sprint 2.1 COMPLETE (PRs #8 and #9 open) → Sprin
 | feat/exif-service | T1.2 EXIF | merged | #5 |
 | feat/dedup-service | T1.3 dedup | merged | #6 |
 | feat/meme-detector | T1.3 meme | merged | #7 |
-| feat/clip-service | T2.1 CLIP | open PR | #8 |
-| feat/geo-service | T2.1 Geo | open PR | #9 |
+| feat/clip-service | T2.1 CLIP | merged | #8 |
+| feat/geo-service | T2.1 Geo | merged | #9 |
 
 ## Completed This Session
 - Sprint 2.1: CLIP service + Geo service (TDD, both reviewed)
@@ -64,7 +64,8 @@ Phase 2 — AI Intelligence / Sprint 2.1 COMPLETE (PRs #8 and #9 open) → Sprin
   - Validates lat/lon, batch uses single search() call, empty-result guard
   - 25 tests using real coordinates (Chennai, London, NYC verified)
 - open-clip-torch, chromadb, reverse_geocoder added as dependencies
-- 212 tests passing on clip branch, 207 on geo branch, ~94% coverage each
+- 212 tests on clip branch, 238 on geo branch (includes clip+geo); both PRs merged to main
+- CodeRabbit fixes applied: `or ""` null guard in geo, E501 line length fixes, RuntimeError docstring
 
 ## Blocked / Needs Attention
 - Branch protection skipped (GitHub free plan limitation for private repos).
@@ -80,9 +81,7 @@ Phase 2 — AI Intelligence / Sprint 2.1 COMPLETE (PRs #8 and #9 open) → Sprin
 | Suite | Passing | Failing | Coverage |
 |---|---|---|---|
 | frontend (bun test) | 28 | 0 | — |
-| backend (pytest) on main | 181 | 0 | 92% |
-| backend on feat/clip-service | 212 | 0 | 94% |
-| backend on feat/geo-service | 207 | 0 | 93% |
+| backend (pytest) on main | 238 | 0 | 94% |
 
 ## Environment Notes
 - VPS: configure SSH + Tailscale IP in `config.yaml` (gitignored)
@@ -104,8 +103,7 @@ cd backend && uv run pytest
 ```
 
 ## Next Session Should
-1. Merge PR #8 (clip-service) and PR #9 (geo-service) after CodeRabbit review
-2. Sprint 2.2: Two services in sequence:
+1. Sprint 2.2: Two services in sequence:
    - feat/rename-service: generate final filename (YYYY-MM-DD_HHMMSS_City_Person_Model_hash.ext)
    - feat/pipeline: orchestrate all 15 stages end-to-end
-3. Each in its own worktree, TDD cycle
+2. Each in its own worktree, TDD cycle
