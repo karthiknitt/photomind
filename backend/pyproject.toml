@@ -9,6 +9,7 @@ dependencies = [
     "imagehash>=4.3.2",
     "open-clip-torch>=3.3.0",
     "pillow>=12.1.1",
+    "reverse-geocoder>=1.5.1",
 ]
 
 [dependency-groups]
