@@ -243,10 +243,12 @@ class TestStoreFaces:
             embedding=embedding,
         )
 
-        # Use an in-memory ChromaDB client to verify the upsert
+        # Use an isolated in-memory ChromaDB client; unique collection name avoids
+        # cross-test contamination when chromadb.Client() shares a global store.
         in_mem_client = chromadb.Client()
+        col_name = f"faces_{uuid.uuid4().hex}"
         fake_collection = in_mem_client.get_or_create_collection(
-            "faces", metadata={"hnsw:space": "cosine"}
+            col_name, metadata={"hnsw:space": "cosine"}
         )
 
         with patch("photomind.services.face.chromadb") as mock_chroma_mod:
@@ -266,8 +268,9 @@ class TestStoreFaces:
         photo_id = "photo-multi"
 
         in_mem_client = chromadb.Client()
+        col_name = f"faces_{uuid.uuid4().hex}"
         fake_collection = in_mem_client.get_or_create_collection(
-            "faces", metadata={"hnsw:space": "cosine"}
+            col_name, metadata={"hnsw:space": "cosine"}
         )
 
         faces_list = []
@@ -317,8 +320,9 @@ class TestStoreFaces:
         )
 
         in_mem_client = chromadb.Client()
+        col_name = f"faces_{uuid.uuid4().hex}"
         fake_collection = in_mem_client.get_or_create_collection(
-            "faces", metadata={"hnsw:space": "cosine"}
+            col_name, metadata={"hnsw:space": "cosine"}
         )
 
         with patch("photomind.services.face.chromadb") as mock_chroma_mod:
@@ -347,33 +351,30 @@ class TestStoreFaces:
 
 class TestSingleton:
     def test_singleton_is_loaded_once(self, sample_image: Path, face_mod: Any) -> None:
-        """FaceAnalysis() is instantiated exactly once across multiple detect() calls."""
+        """FaceAnalysis() is instantiated exactly once across multiple _get_app() calls."""
         mock_app = _make_mock_app([])
-
         mock_face_analysis_class = MagicMock(return_value=mock_app)
 
-        with patch("photomind.services.face._get_app", wraps=None) as _:
-            # Reset singleton
-            face_mod._app = None
+        import sys
 
-            # Patch insightface at module import level
-            with patch.dict(
-                "sys.modules",
-                {
-                    "insightface": MagicMock(),
-                    "insightface.app": MagicMock(),
-                },
-            ):
-                import sys
+        # Build fake insightface module hierarchy
+        fake_insightface_app = MagicMock()
+        fake_insightface_app.FaceAnalysis = mock_face_analysis_class
+        fake_insightface = MagicMock()
+        fake_insightface.app = fake_insightface_app
 
-                sys.modules["insightface"].app.FaceAnalysis = mock_face_analysis_class
-                face_mod._app = None  # ensure clean state
+        face_mod._app = None  # ensure singleton is unset
 
-                # Manually test _get_app singleton logic
-                face_mod._app = None
-                app1 = face_mod._get_app()
-                app2 = face_mod._get_app()
+        with patch.dict(
+            sys.modules,
+            {
+                "insightface": fake_insightface,
+                "insightface.app": fake_insightface_app,
+            },
+        ):
+            # Call _get_app() twice — should only instantiate FaceAnalysis once
+            app1 = face_mod._get_app()
+            app2 = face_mod._get_app()
 
-            assert app1 is app2
-            # FaceAnalysis should be instantiated only once
-            assert mock_face_analysis_class.call_count == 1
+        assert app1 is app2
+        assert mock_face_analysis_class.call_count == 1
