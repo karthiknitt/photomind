@@ -1,9 +1,9 @@
 # PhotoMind — Project Status
 
-_Last updated: 2026-03-26 by Claude (Sprint 2.3 in progress, feat/sprint-2.3 branch)_
+_Last updated: 2026-03-26 by Claude (Sprint 2.3 complete, PR #12 merged)_
 
 ## Current Phase & Sprint
-Phase 2 — AI Intelligence / Sprint 2.3 IN PROGRESS (feat/sprint-2.3 branch, PR pending)
+Phase 2 — AI Intelligence / Sprint 2.3 COMPLETE (PR #12 merged) → Phase 3 Sprint 3.1 next
 
 ## Overall Progress
 - [x] Phase 0 — Bootstrap ← COMPLETE
@@ -17,11 +17,11 @@ Phase 2 — AI Intelligence / Sprint 2.3 IN PROGRESS (feat/sprint-2.3 branch, PR
 - [x] T2.1 — Geo service: reverse_geocoder offline geocoding (PR #9 merged)
 - [x] T2.2 — Rename service: generate final filename from metadata (PR #10 merged)
 - [x] T2.2 — Core pipeline: orchestrate all 15 stages (PR #11 merged)
-- [ ] T2.3 — Meme fix: WhatsApp downgraded to MEDIUM signal + filename pattern detection (PR pending)
-- [ ] T2.3 — Daemon: run_scan() scans all sources, filters known paths, processes new images
-- [ ] T2.3 — Scheduler: run_forever() periodic loop, clean KeyboardInterrupt shutdown
-- [ ] T2.3 — SystemD service file: deploy/photomind-daemon.service
-- [ ] T2.3 — Worker entry point: python -m photomind.worker [--scan-once] [--config PATH]
+- [x] T2.3 — Meme fix: WhatsApp downgraded to MEDIUM signal + filename pattern detection (PR #12)
+- [x] T2.3 — Daemon: run_scan() scans all sources, filters known paths, processes new images
+- [x] T2.3 — Scheduler: run_forever() periodic loop, clean KeyboardInterrupt shutdown
+- [x] T2.3 — SystemD service file: deploy/photomind-daemon.service
+- [x] T2.3 — Worker entry point: python -m photomind.worker [--scan-once] [--config PATH]
 
 ## Phase 1 Task Status
 - [x] T1.1 — DB Schema: Drizzle migrations, 24 integration tests (PR #1 merged)
@@ -60,7 +60,7 @@ Phase 2 — AI Intelligence / Sprint 2.3 IN PROGRESS (feat/sprint-2.3 branch, PR
 | feat/geo-service | T2.1 Geo | merged | #9 |
 | feat/rename-service | T2.2 rename + photos_db | merged | #10 |
 | feat/pipeline | T2.2 core pipeline | merged | #11 |
-| feat/sprint-2.3 | T2.3 daemon + meme fix | open PR | #12 |
+| feat/sprint-2.3 | T2.3 daemon + meme fix | merged | #12 |
 
 ## Completed This Session (Sprint 2.3)
 - meme.py: WhatsApp EXIF software downgraded HIGH→MEDIUM; new `_check_whatsapp_filename()`
@@ -108,7 +108,7 @@ Phase 2 — AI Intelligence / Sprint 2.3 IN PROGRESS (feat/sprint-2.3 branch, PR
 | Suite | Passing | Failing | Coverage |
 |---|---|---|---|
 | frontend (bun test) | 28 | 0 | — |
-| backend (pytest) on feat/sprint-2.3 | 358 | 0 | 92.40% |
+| backend (pytest) on main | 358 | 0 | 92.40% |
 
 ## Environment Notes
 - VPS: configure SSH + Tailscale IP in `config.yaml` (gitignored)
