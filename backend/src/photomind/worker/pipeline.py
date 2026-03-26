@@ -178,11 +178,17 @@ def process_photo(
         # Stage 9 zero-shot labeling deferred: requires a label taxonomy (Phase 3)
         update_photo(db_path, photo_id, clip_indexed=True)
 
-        # ── Stages 10-11: Face detect / cluster ──────────────────────────────
-        # TODO(Phase 3): wire InsightFace buffalo_sc here
-        # face_results = face.detect(tmp_file)
-        # face.store_faces(db_path, photo_id, face_results)
-        logger.debug("[%s] Stages 10-11: face detect/cluster stub (Phase 3)", photo_id)
+        # ── Stages 10-11: Face detect ─────────────────────────────────────────
+        logger.info("[%s] Stage 10: face detect", photo_id)
+        from photomind.services import face as face_svc
+
+        face_results = face_svc.detect(
+            tmp_file, det_thresh=config.insightface.det_thresh
+        )
+        if face_results:
+            face_svc.store_faces(db_path, config.chroma_db_path, photo_id, face_results)
+        update_photo(db_path, photo_id, face_count=len(face_results))
+        logger.debug("[%s] Stage 10: %d face(s) detected", photo_id, len(face_results))
 
         # ── Stage 12: Geocode ─────────────────────────────────────────────────
         city = state = country = None
