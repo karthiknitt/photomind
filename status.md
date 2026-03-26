@@ -1,16 +1,26 @@
 # PhotoMind — Project Status
 
-_Last updated: 2026-03-26 by Claude (Sprint 2.3 complete, PR #12 merged)_
+_Last updated: 2026-03-27 by Claude (Sprint 3.2 complete, PRs #16-17 merged, #18 open)_
 
 ## Current Phase & Sprint
-Phase 2 — AI Intelligence / Sprint 2.3 COMPLETE (PR #12 merged) → Phase 3 Sprint 3.1 next
+Phase 3 — Faces + API + UI / Sprint 3.2 IN PROGRESS (PRs #16 + #17 merged, #18 awaiting CodeRabbit)
 
 ## Overall Progress
 - [x] Phase 0 — Bootstrap ← COMPLETE
 - [x] Phase 1 — Data Foundation ← COMPLETE (all PRs merged)
-- [ ] Phase 2 — AI Intelligence ← IN PROGRESS (Sprints 2.1 + 2.2 done)
-- [ ] Phase 3 — Faces + API + UI
+- [x] Phase 2 — AI Intelligence ← COMPLETE (Sprints 2.1, 2.2, 2.3 done)
+- [ ] Phase 3 — Faces + API + UI ← IN PROGRESS (Sprint 3.2 mostly done)
 - [ ] Phase 4 — Full UI + Deploy
+
+## Phase 3 Task Status
+- [x] T3.1 — Face service: InsightFace buffalo_sc CPU detect + embed, cosine ChromaDB collection (PR #13)
+- [x] T3.1 — Pipeline stage 10 wired: face detect + store_faces + update face_count (PR #13)
+- [x] T3.1 — Gallery API: GET /api/photos paginated, Drizzle projection, offset/page (PR #14)
+- [x] T3.1 — CLIP bridge: FastAPI GET /search, text→embedding→ChromaDB query (PR #15)
+- [x] T3.1 — Search API: GET /api/search hybrid text+semantic, graceful degradation (PR #15)
+- [x] T3.2 — Face clustering: HDBSCAN periodic job (run_clustering), scheduler integration (PR #16)
+- [x] T3.2 — Bridge systemd service: deploy/photomind-bridge.service (PR #17)
+- [ ] T3.2 — Gallery UI: paginated photo grid + search page (PR #18, awaiting review)
 
 ## Phase 2 Task Status
 - [x] T2.1 — CLIP service: open_clip ViT-B/32 + ChromaDB (PR #8 merged)
@@ -45,6 +55,12 @@ Phase 2 — AI Intelligence / Sprint 2.3 COMPLETE (PR #12 merged) → Phase 3 Sp
 - [x] T0.10 — CI: GitHub Actions (frontend + backend jobs, runs on PRs to main)
 - [!] Branch protection: SKIPPED — requires GitHub Pro for private repos
 
+## Test Status
+| Suite | Passing | Failing | Coverage |
+|---|---|---|---|
+| frontend (bun test) | 65 | 0 | — |
+| backend (pytest) on main | 432 | 0 | ~92% |
+
 ## Active Branches
 | Branch | Task | Status | PR # |
 |---|---|---|---|
@@ -61,6 +77,62 @@ Phase 2 — AI Intelligence / Sprint 2.3 COMPLETE (PR #12 merged) → Phase 3 Sp
 | feat/rename-service | T2.2 rename + photos_db | merged | #10 |
 | feat/pipeline | T2.2 core pipeline | merged | #11 |
 | feat/sprint-2.3 | T2.3 daemon + meme fix | merged | #12 |
+| feat/face-service | T3.1 face service + pipeline | merged | #13 |
+| feat/gallery-api | T3.1 gallery API | merged | #14 |
+| feat/search-api | T3.1 CLIP bridge + search API | merged | #15 |
+| feat/face-cluster | T3.2 HDBSCAN face clustering | merged | #16 |
+| feat/bridge-service | T3.2 bridge systemd service | merged | #17 |
+| feat/gallery-ui | T3.2 gallery + search UI | open | #18 |
+
+## Completed This Session (Sprint 3.2)
+- cluster.py: run_clustering() — HDBSCAN (sklearn, euclidean on L2-normed vectors)
+  - Fetches all face embeddings from ChromaDB "faces" collection
+  - Fresh rebuild each run: clears face_clusters + faces.cluster_id, re-inserts
+  - Noise faces (label=-1) get cluster_id=NULL
+  - ClusterResult dataclass: n_faces / n_clusters / n_noise
+  - 10 tests, ruff-clean; fixed E501 docstrings (CodeRabbit PR #16)
+- scheduler.py: clustering integrated into run_forever() periodic loop
+  - last_cluster_time = time.time() at startup (avoids immediate run on boot)
+  - Cluster errors logged + skipped; loop continues
+  - 3 new scheduler tests for clustering integration
+- deploy/photomind-bridge.service: systemd unit for CLIP bridge (uvicorn :8765)
+  - Fixed: StartLimitInterval→StartLimitIntervalSec in [Unit] section (CodeRabbit PR #17)
+- Gallery UI: (gallery) route group, shared sticky header layout
+  - app/(gallery)/page.tsx: paginated photo grid (48/page), PhotoCard with next/image
+  - app/(gallery)/search/page.tsx: 400ms debounced search, mode selector, ResultCard
+  - GET /api/thumbnails/[id]: JPEG from THUMBNAILS_PATH, path-traversal guard
+  - .gitignore: fixed thumbnails/ glob not to swallow Next.js source route
+  - api.thumbnails.test.ts: 6 tests using bun:test mutable-cell pattern (no vi.resetModules)
+  - THUMBNAILS_DIR read inside handler (not top-level const) — env var takes effect per-request
+  - 65 frontend tests, 0 fail
+- PR #16 merged, PR #17 merged, PR #18 open (awaiting CodeRabbit)
+
+## Completed This Session (Sprint 3.1)
+- face.py: InsightFace buffalo_sc singleton, detect() filters by det_thresh=0.5,
+  store_faces() writes to SQLite faces table + ChromaDB "faces" collection (cosine distance)
+  - embedding_id == face_id UUID (links SQLite ↔ ChromaDB)
+  - cluster_id=NULL at detection time; HDBSCAN fills it in the periodic job
+  - cv2.imread() None check added (CodeRabbit fix)
+  - 12 tests, 96% coverage; full suite 370 pass, 92.58%
+- pipeline.py: stage 10 stub replaced with real face_svc.detect() + store_faces() call
+- pyproject.toml: insightface>=0.7.3 + onnxruntime>=1.20.0 added
+- Gallery API: GET /api/photos (page/limit/status/from/to)
+  - Drizzle projection: 17 public fields, internal fields omitted
+  - Parallel COUNT(*) + data query with Promise.all
+  - Sort: dateTaken DESC, createdAt DESC (stable secondary sort)
+  - 14 tests, all pass; vi.resetModules() removed (not in bun vitest compat)
+- CLIP bridge: FastAPI on localhost:8765
+  - embed_text() added to clip.py (text→512-dim CLIP vector)
+  - GET /search?q=<query>&n=20 → embeds query → ChromaDB "photos" query → returns [{id, distance}]
+  - GET /health → liveness check
+  - fastapi>=0.115.0 + uvicorn>=0.32.0 added
+- Search API: GET /api/search?q=<query>&mode=hybrid&limit=20&page=1
+  - text mode: LIKE on city/country/filenameFinal
+  - semantic mode: calls CLIP_BRIDGE_URL, score = 1 - distance
+  - hybrid mode: union+dedup, max score, "hybrid" matchSource for both hits
+  - CLIP_BRIDGE_URL env var gates semantic (graceful text-only fallback in CI)
+  - inArray() guard prevents empty-array SQLite error
+  - 17 search tests + 12 bridge tests; all pass
 
 ## Completed This Session (Sprint 2.3)
 - meme.py: WhatsApp EXIF software downgraded HIGH→MEDIUM; new `_check_whatsapp_filename()`
@@ -104,7 +176,7 @@ Phase 2 — AI Intelligence / Sprint 2.3 COMPLETE (PR #12 merged) → Phase 3 Sp
 - Phase 0 fully complete
 - All tests green locally
 
-## Test Status
+## Test Status (Sprint 2.3 — superseded, see Sprint 3.1 status above)
 | Suite | Passing | Failing | Coverage |
 |---|---|---|---|
 | frontend (bun test) | 28 | 0 | — |
@@ -130,8 +202,9 @@ cd backend && uv run pytest
 ```
 
 ## Next Session Should
-Sprint 3.1 (Phase 3 start — parallel work):
-1. Face service (`services/face.py`) — InsightFace buffalo_sc CPU, detect + embed faces
-2. Gallery API (`app/api/photos/route.ts`) — paginated photo list from SQLite
-3. Search API (`app/api/search/route.ts`) — hybrid text + CLIP semantic search
-   (see plan.md Sprint 3.1 for details)
+1. Merge PR #18 (gallery-ui) after CodeRabbit review
+2. Begin Phase 4: Full UI polish + VPS deploy
+   - Photo detail view / lightbox
+   - Face cluster labels UI (assign names to clusters)
+   - VPS deploy: sync code, run migrations, start systemd services
+   - End-to-end smoke test against real OneDrive photos
