@@ -19,7 +19,8 @@ class TestReverseGeocode:
         """All values in the returned dict must be strings."""
         result = reverse_geocode(13.0827, 80.2707)
         for key, value in result.items():
-            assert isinstance(value, str), f"Expected str for key '{key}', got {type(value)}"
+            msg = f"Expected str for key '{key}', got {type(value)}"
+            assert isinstance(value, str), msg
 
     def test_chennai_coordinates(self) -> None:
         """(13.0827, 80.2707) should resolve to Chennai area, India."""
@@ -150,7 +151,8 @@ class TestBatchReverseGeocode:
         results = batch_reverse_geocode(coords)
         for result in results:
             for key, value in result.items():
-                assert isinstance(value, str), f"Expected str for '{key}', got {type(value)}"
+                msg = f"Expected str for '{key}', got {type(value)}"
+                assert isinstance(value, str), msg
 
 
 class TestEdgeCases:

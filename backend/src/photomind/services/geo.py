@@ -46,9 +46,9 @@ def _result_to_dict(rg_result: dict[str, Any]) -> dict[str, str]:
         dict with keys "city", "state", "country" (all strings).
     """
     return {
-        "city": str(rg_result.get("name", "")),
-        "state": str(rg_result.get("admin1", "")),
-        "country": str(rg_result.get("cc", "")),
+        "city": str(rg_result.get("name") or ""),
+        "state": str(rg_result.get("admin1") or ""),
+        "country": str(rg_result.get("cc") or ""),
     }
 
 
@@ -93,6 +93,8 @@ def batch_reverse_geocode(
     Raises:
         ValueError: if coords is empty.
         ValueError: if any coordinate is out of valid range.
+        RuntimeError: if reverse_geocoder returns a different number of results
+            than the number of input coordinates.
     """
     if not coords:
         raise ValueError("coords must not be empty")
