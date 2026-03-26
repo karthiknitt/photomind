@@ -106,8 +106,9 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
-  const runSearch = useCallback(async (q: string, m: Mode) => {
+  const runSearch = useCallback(async (q: string, m: Mode, signal: AbortSignal) => {
     if (!q.trim()) {
       setResults(null);
       return;
@@ -116,26 +117,31 @@ export default function SearchPage() {
     setError(null);
     try {
       const res = await fetch(
-        `/api/search?q=${encodeURIComponent(q)}&mode=${m}&limit=48`
+        `/api/search?q=${encodeURIComponent(q)}&mode=${m}&limit=48`,
+        { signal }
       );
       if (!res.ok) throw new Error(`Search failed: ${res.status}`);
       const json = (await res.json()) as SearchResponse;
       setResults(json);
     } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") return; // stale request — ignore
       setError(e instanceof Error ? e.message : "Search failed");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Debounce 400ms
+  // Debounce 400ms; abort any in-flight request when query/mode changes
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      runSearch(query, mode);
+      abortRef.current?.abort();
+      abortRef.current = new AbortController();
+      runSearch(query, mode, abortRef.current.signal);
     }, 400);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
+      abortRef.current?.abort();
     };
   }, [query, mode, runSearch]);
 
@@ -174,6 +180,7 @@ export default function SearchPage() {
                 key={value}
                 type="button"
                 onClick={() => setMode(value)}
+                aria-pressed={mode === value}
                 className={`px-3 py-2 text-xs font-medium transition-colors ${
                   mode === value
                     ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"

@@ -61,7 +61,7 @@ function createTestDb(): TestDb {
   db.run(sql`PRAGMA foreign_keys=ON`);
   db.run(sql`PRAGMA journal_mode=WAL`);
   migrate(db, {
-    migrationsFolder: path.resolve(process.cwd(), "drizzle"),
+    migrationsFolder: path.resolve(__dirname, "../drizzle"),
   });
   return db;
 }
