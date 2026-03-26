@@ -1,0 +1,34 @@
+[Unit]
+Description=PhotoMind CLIP HTTP bridge (text→embedding search)
+Documentation=https://github.com/karthiknitt/photomind
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=karthik
+WorkingDirectory=/home/karthik/projects/PhotoMind/backend
+
+# FastAPI bridge on localhost:8765 — Next.js reads via CLIP_BRIDGE_URL
+ExecStart=/home/karthik/.local/bin/uv run python -m uvicorn photomind.bridge.main:app \
+    --host 127.0.0.1 \
+    --port 8765 \
+    --no-access-log
+
+# Restart on failure; shorter backoff than daemon (bridge is stateless)
+Restart=on-failure
+RestartSec=10s
+StartLimitInterval=120s
+StartLimitBurst=6
+
+# Logging — journalctl -u photomind-bridge -f
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=photomind-bridge
+
+# Environment — override CHROMA_DB_PATH if needed in /etc/systemd/system/photomind-bridge.service.d/override.conf
+Environment=PYTHONUNBUFFERED=1
+Environment=CHROMA_DB_PATH=/home/karthik/photomind/chroma_db
+
+[Install]
+WantedBy=multi-user.target
