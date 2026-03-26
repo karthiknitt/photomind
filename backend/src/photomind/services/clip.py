@@ -251,6 +251,37 @@ def zero_shot_label(
     return top
 
 
+def embed_text(text: str) -> list[float]:
+    """Generate a 512-dim CLIP embedding for a text query.
+
+    Uses the same model as embed_image() — both share _get_model() singleton.
+
+    Args:
+        text: query string to encode.
+
+    Returns:
+        list of 512 floats (float16 values, L2-normalised).
+
+    Raises:
+        ValueError: if text is empty or whitespace-only.
+    """
+    if not text.strip():
+        raise ValueError("text must be non-empty")
+
+    import torch
+
+    model, _, tokenizer = _get_model()
+    tokens = tokenizer([text])
+
+    with torch.no_grad():
+        text_features = model.encode_text(tokens)
+        text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+
+    embedding: list[float] = text_features.squeeze().tolist()
+    logger.debug("embed_text: query=%r, dim=%d", text, len(embedding))
+    return embedding
+
+
 def get_chroma_collection(
     db_path: str | Path,
     collection_name: str = "photos",
