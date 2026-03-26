@@ -22,7 +22,6 @@ from photomind.services.photos_db import (
     update_photo,
 )
 
-
 # ─── Fixtures ──────────────────────────────────────────────────────────────────
 
 
@@ -110,7 +109,7 @@ class TestCreatePhoto:
     def test_duplicate_id_raises(self, db_path: Path) -> None:
         rec = _make_record()
         create_photo(db_path, rec)
-        with pytest.raises(Exception):  # UNIQUE constraint violation
+        with pytest.raises(sqlite3.IntegrityError):  # UNIQUE constraint violation
             create_photo(db_path, rec)
 
     def test_multiple_photos_stored(self, db_path: Path) -> None:

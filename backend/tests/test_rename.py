@@ -16,13 +16,11 @@ Rules tested:
 from __future__ import annotations
 
 import hashlib
-import time
 from pathlib import Path
 
 import pytest
 
 from photomind.services.rename import RenameResult, generate_filename
-
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -101,6 +99,7 @@ class TestDateSegment:
         result = generate_filename(file_path=f, date_taken=None, extension=".jpg")
         # Should still produce a date-like prefix (YYYY-MM-DD_HHMMSS)
         import re
+
         assert re.match(r"\d{4}-\d{2}-\d{2}_\d{6}", result.filename)
 
     def test_mtime_fallback_uses_file_mtime(self, tmp_path: Path) -> None:
@@ -108,6 +107,7 @@ class TestDateSegment:
         # Force a known mtime
         known_ts = 1672531200  # 2023-01-01 00:00:00 UTC
         import os
+
         os.utime(f, (known_ts, known_ts))
         result = generate_filename(file_path=f, date_taken=None, extension=".jpg")
         assert result.filename.startswith("2023-01-01_000000")
