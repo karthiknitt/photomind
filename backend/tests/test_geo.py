@@ -1,5 +1,7 @@
 """Tests for the geo reverse geocoding service."""
 
+from unittest.mock import patch
+
 import pytest
 
 from photomind.services.geo import batch_reverse_geocode, reverse_geocode
@@ -149,3 +151,22 @@ class TestBatchReverseGeocode:
         for result in results:
             for key, value in result.items():
                 assert isinstance(value, str), f"Expected str for '{key}', got {type(value)}"
+
+
+class TestEdgeCases:
+    """Edge case and defensive tests."""
+
+    def test_reverse_geocode_empty_library_result_returns_empty_strings(self) -> None:
+        """If reverse_geocoder returns empty list, return empty-string dict."""
+        with patch("photomind.services.geo.reverse_geocoder.search", return_value=[]):
+            result = reverse_geocode(13.0827, 80.2707)
+        assert result == {"city": "", "state": "", "country": ""}
+
+    def test_batch_reverse_geocode_length_mismatch_raises_runtime_error(self) -> None:
+        """If library returns wrong number of results, raise RuntimeError."""
+        with patch(
+            "photomind.services.geo.reverse_geocoder.search",
+            return_value=[{"name": "Chennai", "admin1": "Tamil Nadu", "cc": "IN"}],
+        ):
+            with pytest.raises(RuntimeError, match="results"):
+                batch_reverse_geocode([(13.0827, 80.2707), (51.5074, -0.1278)])

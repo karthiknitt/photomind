@@ -69,6 +69,9 @@ def reverse_geocode(lat: float, lon: float) -> dict[str, str]:
     _validate_coords(lat, lon)
     logger.debug("reverse_geocode lat=%s lon=%s", lat, lon)
     results: list[dict[str, Any]] = reverse_geocoder.search([(lat, lon)], verbose=False)
+    if not results:
+        logger.warning("reverse_geocoder returned empty result for (%s, %s)", lat, lon)
+        return {"city": "", "state": "", "country": ""}
     return _result_to_dict(results[0])
 
 
@@ -99,4 +102,8 @@ def batch_reverse_geocode(
 
     logger.info("batch_reverse_geocode: processing %d coordinates", len(coords))
     results: list[dict[str, Any]] = reverse_geocoder.search(coords, verbose=False)
+    if len(results) != len(coords):
+        raise RuntimeError(
+            f"reverse_geocoder returned {len(results)} results for {len(coords)} inputs"
+        )
     return [_result_to_dict(r) for r in results]
