@@ -3,6 +3,8 @@ Description=PhotoMind CLIP HTTP bridge (text→embedding search)
 Documentation=https://github.com/karthiknitt/photomind
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=120s
+StartLimitBurst=6
 
 [Service]
 Type=simple
@@ -18,8 +20,6 @@ ExecStart=/home/karthik/.local/bin/uv run python -m uvicorn photomind.bridge.mai
 # Restart on failure; shorter backoff than daemon (bridge is stateless)
 Restart=on-failure
 RestartSec=10s
-StartLimitInterval=120s
-StartLimitBurst=6
 
 # Logging — journalctl -u photomind-bridge -f
 StandardOutput=journal
