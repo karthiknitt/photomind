@@ -1,9 +1,9 @@
 # PhotoMind — Project Status
 
-_Last updated: 2026-03-27 by Claude (Sprint 3.2 complete, PRs #16-17 merged, #18 open)_
+_Last updated: 2026-03-27 by Claude (Sprint 3.2 COMPLETE — PRs #16, #17, #18 merged)_
 
 ## Current Phase & Sprint
-Phase 3 — Faces + API + UI / Sprint 3.2 IN PROGRESS (PRs #16 + #17 merged, #18 awaiting CodeRabbit)
+Phase 3 — Faces + API + UI / Sprint 3.2 COMPLETE (PRs #16 + #17 + #18 all merged)
 
 ## Overall Progress
 - [x] Phase 0 — Bootstrap ← COMPLETE
@@ -20,7 +20,7 @@ Phase 3 — Faces + API + UI / Sprint 3.2 IN PROGRESS (PRs #16 + #17 merged, #18
 - [x] T3.1 — Search API: GET /api/search hybrid text+semantic, graceful degradation (PR #15)
 - [x] T3.2 — Face clustering: HDBSCAN periodic job (run_clustering), scheduler integration (PR #16)
 - [x] T3.2 — Bridge systemd service: deploy/photomind-bridge.service (PR #17)
-- [ ] T3.2 — Gallery UI: paginated photo grid + search page (PR #18, awaiting review)
+- [x] T3.2 — Gallery UI: paginated photo grid + search page (PR #18)
 
 ## Phase 2 Task Status
 - [x] T2.1 — CLIP service: open_clip ViT-B/32 + ChromaDB (PR #8 merged)
@@ -82,7 +82,7 @@ Phase 3 — Faces + API + UI / Sprint 3.2 IN PROGRESS (PRs #16 + #17 merged, #18
 | feat/search-api | T3.1 CLIP bridge + search API | merged | #15 |
 | feat/face-cluster | T3.2 HDBSCAN face clustering | merged | #16 |
 | feat/bridge-service | T3.2 bridge systemd service | merged | #17 |
-| feat/gallery-ui | T3.2 gallery + search UI | open | #18 |
+| feat/gallery-ui | T3.2 gallery + search UI | merged | #18 |
 
 ## Completed This Session (Sprint 3.2)
 - cluster.py: run_clustering() — HDBSCAN (sklearn, euclidean on L2-normed vectors)
