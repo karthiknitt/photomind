@@ -1,16 +1,25 @@
 # PhotoMind — Project Status
 
-_Last updated: 2026-03-27 by Claude (Sprint 3.2 COMPLETE — PRs #16, #17, #18 merged)_
+_Last updated: 2026-03-27 by Claude (Sprint 4.1 + 4.2 COMPLETE — PRs #19–24 merged)_
 
 ## Current Phase & Sprint
-Phase 3 — Faces + API + UI / Sprint 3.2 COMPLETE (PRs #16 + #17 + #18 all merged)
+Phase 4 — Full UI + Deploy / Sprint 4.1 + 4.2 COMPLETE (PRs #19–24 all merged)
 
 ## Overall Progress
 - [x] Phase 0 — Bootstrap ← COMPLETE
 - [x] Phase 1 — Data Foundation ← COMPLETE (all PRs merged)
 - [x] Phase 2 — AI Intelligence ← COMPLETE (Sprints 2.1, 2.2, 2.3 done)
-- [ ] Phase 3 — Faces + API + UI ← IN PROGRESS (Sprint 3.2 mostly done)
-- [ ] Phase 4 — Full UI + Deploy
+- [x] Phase 3 — Faces + API + UI ← COMPLETE (Sprints 3.1, 3.2 done)
+- [ ] Phase 4 — Full UI + Deploy ← IN PROGRESS (4.1 code done; 4.2 VPS setup pending)
+
+## Phase 4 Task Status
+- [x] T4.1-a — Photo detail dialog: GET /api/photos/[id] + lightbox (PR #19)
+- [x] T4.1-b — Faces UI: /faces cluster grid + /faces/[id] + inline label editing (PR #21)
+- [x] T4.1-c — Processing dashboard: /dashboard stats + activity feed (PR #20)
+- [x] T4.1-d — Logs UI: /logs paginated action log with filter (PR #23)
+- [x] T4.1-e — Settings UI: /settings + bridge health check (PR #22)
+- [x] T4.2 — Deploy infra: nginx + systemd + deploy.sh + smoke-test.sh (PR #24)
+- [ ] T4.2 — First-time VPS setup: copy service files, nginx config, issue Tailscale cert, run deploy.sh
 
 ## Phase 3 Task Status
 - [x] T3.1 — Face service: InsightFace buffalo_sc CPU detect + embed, cosine ChromaDB collection (PR #13)
@@ -58,7 +67,7 @@ Phase 3 — Faces + API + UI / Sprint 3.2 COMPLETE (PRs #16 + #17 + #18 all merg
 ## Test Status
 | Suite | Passing | Failing | Coverage |
 |---|---|---|---|
-| frontend (bun test) | 65 | 0 | — |
+| frontend (bun test) | 131 | 0 | — |
 | backend (pytest) on main | 432 | 0 | ~92% |
 
 ## Active Branches
@@ -202,9 +211,13 @@ cd backend && uv run pytest
 ```
 
 ## Next Session Should
-1. Merge PR #18 (gallery-ui) after CodeRabbit review
-2. Begin Phase 4: Full UI polish + VPS deploy
-   - Photo detail view / lightbox
-   - Face cluster labels UI (assign names to clusters)
-   - VPS deploy: sync code, run migrations, start systemd services
-   - End-to-end smoke test against real OneDrive photos
+1. VPS first-time setup (SSH to 100.106.254.102 via Tailscale):
+   a. Get Tailscale hostname: `tailscale status --json | jq -r '.Self.DNSName | rtrimstr(".")'`
+   b. Issue TLS cert: `sudo tailscale cert <hostname>` → move to /etc/ssl/photomind/
+   c. Edit deploy/nginx/photomind.conf — replace TAILSCALE_HOSTNAME
+   d. Enable nginx site: `sudo ln -s ~/projects/PhotoMind/deploy/nginx/photomind.conf /etc/nginx/sites-enabled/photomind`
+   e. Copy and enable systemd service: `sudo cp deploy/photomind-frontend.service /etc/systemd/system/`
+   f. Copy env template: `cp deploy/env.production.template ~/photomind/.env.production` (edit paths)
+   g. Run: `scripts/deploy.sh`
+   h. Verify: `scripts/smoke-test.sh https://<hostname>`
+2. End-to-end smoke test against real OneDrive photos (pipeline → gallery → search → faces)
