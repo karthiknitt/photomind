@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "bunx --bun next dev",
-    "build": "bunx --bun next build",
-    "start": "bunx --bun next start",
+    "dev": "bun --bun ./node_modules/.bin/next dev",
+    "build": "bun --bun ./node_modules/.bin/next build",
+    "start": "bun --bun ./node_modules/.bin/next start",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
