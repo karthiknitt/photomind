@@ -17,7 +17,7 @@
  */
 
 import { mock } from "bun:test";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 // ─── Mutable cells ────────────────────────────────────────────────────────────
 
@@ -57,8 +57,7 @@ mock.module("node:fs", () => ({
 
 // Mock node:child_process
 mock.module("node:child_process", () => ({
-  spawnSync: (cmd: string, args: string[], opts?: object) =>
-    _cpCell.spawnSync(cmd, args, opts),
+  spawnSync: (cmd: string, args: string[], opts?: object) => _cpCell.spawnSync(cmd, args, opts),
 }));
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -80,9 +79,7 @@ sources: []
 // Helper: call GET /api/sources
 async function callGet(): Promise<Response> {
   const { GET } = await import("@/app/api/sources/route");
-  const req = new Request("http://localhost/api/sources") as Parameters<
-    typeof GET
-  >[0];
+  const req = new Request("http://localhost/api/sources") as Parameters<typeof GET>[0];
   return GET(req);
 }
 
@@ -485,7 +482,9 @@ describe("DELETE /api/sources", () => {
 
   it("calls rclone config delete with the remote name", async () => {
     await callDelete({ name: "onedrive_karthik" });
-    const deleteArgs = capturedSpawnArgs.find((args) => args[0] === "config" && args[1] === "delete");
+    const deleteArgs = capturedSpawnArgs.find(
+      (args) => args[0] === "config" && args[1] === "delete"
+    );
     expect(deleteArgs).toBeDefined();
     expect(deleteArgs?.[2]).toBe("onedrive_karthik");
   });
