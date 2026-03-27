@@ -102,7 +102,7 @@ def _row_to_record(row: tuple[object, ...]) -> ImportJobRecord:
         status=str(row[1]),
         local_path=str(row[2]),
         label=str(row[3]) if row[3] is not None else None,
-        total_count=int(row[4]) if row[4] is not None else None,
+        total_count=int(row[4]) if row[4] is not None else None,  # type: ignore[arg-type]
         processed_count=int(row[5]),  # type: ignore[arg-type]
         error_count=int(row[6]),  # type: ignore[arg-type]
         created_at=int(row[7]),  # type: ignore[arg-type]

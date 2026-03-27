@@ -21,7 +21,6 @@ from photomind.services.import_jobs_db import (
     update_import_job,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -103,7 +102,6 @@ class TestUpdateImportJob:
 
     def test_update_multiple_fields(self, db_path: Path) -> None:
         """update_import_job can set multiple fields in one call."""
-        now = int(time.time())
         create_import_job(db_path, "job-multi", "/path", None)
         update_import_job(
             db_path,
@@ -133,7 +131,9 @@ class TestUpdateImportJob:
     def test_update_error_status(self, db_path: Path) -> None:
         """status can be set to ERROR."""
         create_import_job(db_path, "job-err", "/path", None)
-        update_import_job(db_path, "job-err", status="ERROR", finished_at=int(time.time()))
+        update_import_job(
+            db_path, "job-err", status="ERROR", finished_at=int(time.time())
+        )
 
         record = get_import_job(db_path, "job-err")
         assert record is not None

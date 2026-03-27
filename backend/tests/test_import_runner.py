@@ -19,14 +19,14 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from photomind.config import PhotoMindConfig, PipelineConfig
 from photomind.services.import_jobs_db import create_import_job, get_import_job
-from photomind.services.photos_db import PhotoRecord, create_photo
 from photomind.services.import_runner import run_import_job
+from photomind.services.photos_db import PhotoRecord, create_photo
 
 # ---------------------------------------------------------------------------
 # Patch targets
@@ -215,7 +215,7 @@ class TestTotalCountSetBeforeProcessing:
         _seed_job(db_path, "job-tc", str(image_dir))
         observed_total_counts: list[int | None] = []
 
-        def capture_total_count(**kwargs: object) -> str:
+        def capture_total_count(**_kwargs: object) -> str:
             record = get_import_job(db_path, "job-tc")
             observed_total_counts.append(record.total_count if record else None)
             return "uuid-x"
@@ -265,14 +265,12 @@ class TestProcessedCountIncrements:
     ) -> None:
         """processed_count in import_jobs increments by 1 after each file."""
         _seed_job(db_path, "job-inc", str(image_dir))
-        observed_counts: list[int] = []
-
         call_index = 0
 
-        def capture_count(**kwargs: object) -> str:
+        def capture_count(**_kwargs: object) -> str:
             nonlocal call_index
             call_index += 1
-            # Read count AFTER this call returns (runner updates after calling process_photo)
+            # Read count AFTER this call returns (runner updates after process_photo)
             return "uuid-x"
 
         with (
@@ -294,9 +292,7 @@ class TestProcessedCountIncrements:
     ) -> None:
         """After each process_photo call, processed_count must be updated in DB."""
         _seed_job(db_path, "job-live", str(image_dir))
-        counts_after_each: list[int] = []
-
-        def record_count(**kwargs: object) -> str:
+        def record_count(**_kwargs: object) -> str:
             # This is called after process_photo, but we want to check what the
             # runner sets AFTER returning from process_photo — so use a side effect
             # that reads DB *after* returning to runner, which isn't possible directly.
