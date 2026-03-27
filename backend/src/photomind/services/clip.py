@@ -122,7 +122,7 @@ def embed_image(image_path: str | Path) -> list[float]:
     img_rgb = _load_rgb_image(image_path)
     model, preprocess, _ = _get_model()
 
-    img_tensor = preprocess(img_rgb).unsqueeze(0)
+    img_tensor = preprocess(img_rgb).unsqueeze(0).half()
 
     with torch.no_grad():
         image_features = model.encode_image(img_tensor)
@@ -232,7 +232,7 @@ def zero_shot_label(
     img_rgb = _load_rgb_image(image_path)
     model, preprocess, tokenizer = _get_model()
 
-    img_tensor = preprocess(img_rgb).unsqueeze(0)
+    img_tensor = preprocess(img_rgb).unsqueeze(0).half()
     text_tokens = tokenizer(labels)
 
     with torch.no_grad():
