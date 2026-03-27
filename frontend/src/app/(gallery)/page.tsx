@@ -248,9 +248,9 @@ function PhotoDetailDialog({
                           className="flex items-center gap-2 text-zinc-800 dark:text-zinc-200"
                         >
                           <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-zinc-200 dark:bg-zinc-700 text-xs font-medium">
-                            {(face.clusterLabel ?? "?")[0].toUpperCase()}
+                            {(face.clusterLabel || "?")[0].toUpperCase()}
                           </span>
-                          <span>{face.clusterLabel ?? "Unknown"}</span>
+                          <span>{face.clusterLabel || "Unknown"}</span>
                           {face.detScore != null && (
                             <span className="ml-auto text-xs text-zinc-400">
                               {(face.detScore * 100).toFixed(0)}%
