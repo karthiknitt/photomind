@@ -303,10 +303,8 @@ tmp_path: /home/karthik/photomind/tmp
 sources:
   - remote: <your_rclone_remote>
     scan_path: Pictures/
-    label: Primary OneDrive
-  - remote: <second_rclone_remote>
-    scan_path: Pictures/
-    label: Secondary OneDrive
+    label: My OneDrive
+  # add more sources as needed
 
 output:
   remote: <your_rclone_remote>
