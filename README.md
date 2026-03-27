@@ -44,7 +44,7 @@ Originals are never modified. The processed library is written to a dedicated On
 ### Setup
 
 ```bash
-git clone https://github.com/karthiknitt/photomind.git
+git clone https://github.com/<your-username>/photomind.git
 cd photomind
 
 # Frontend dependencies

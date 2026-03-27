@@ -193,11 +193,11 @@ Phase 4 — Full UI + Deploy / Sprint 4.1 + 4.2 COMPLETE (PRs #19–24 all merge
 
 ## Environment Notes
 - VPS: configure SSH + Tailscale IP in `config.yaml` (gitignored)
-- rclone remotes: `onedrive_karthik`, `onedrive_wife` (+ others)
-- PhotoMind output folder: `onedrive_karthik:PhotoMind/library/`
+- rclone remotes: configured in `config.yaml` (gitignored)
+- PhotoMind output folder: `<output_remote>:PhotoMind/library/`
 - bun version: 1.3.9
 - Python version: 3.12.3
-- GitHub repo: https://github.com/karthiknitt/photomind
+- GitHub repo: configured (private)
 
 ## How to Resume
 ```bash
@@ -211,7 +211,7 @@ cd backend && uv run pytest
 ```
 
 ## Next Session Should
-1. VPS first-time setup (SSH to 100.106.254.102 via Tailscale):
+1. VPS first-time setup (SSH via Tailscale):
    a. Get Tailscale hostname: `tailscale status --json | jq -r '.Self.DNSName | rtrimstr(".")'`
    b. Issue TLS cert: `sudo tailscale cert <hostname>` → move to /etc/ssl/photomind/
    c. Edit deploy/nginx/photomind.conf — replace TAILSCALE_HOSTNAME

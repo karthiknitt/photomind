@@ -98,7 +98,7 @@ Acceptance criteria:
 2. Runs `systemctl start photomind-daemon`
 3. Opens browser → navigates to `http://photomind.local` (Tailscale hostname)
 4. Creates admin account (Better Auth)
-5. Goes to Settings → Sources → Adds `onedrive_karthik` with scan path `Pictures/`
+5. Goes to Settings → Sources → Adds their rclone remote with scan path `Pictures/`
 6. Clicks "Scan Now" — daemon starts scanning
 7. Watches Processing Dashboard — sees files being queued
 8. After 10 minutes, first photos appear in Gallery

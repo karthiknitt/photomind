@@ -62,3 +62,4 @@ logs/
 # InsightFace model cache
 ~/.insightface/
 backend/.insightface/
+local-notes.md

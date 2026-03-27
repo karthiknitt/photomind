@@ -285,7 +285,7 @@ No port exposure to public internet needed.
 
 OneDrive layout:
 ```
-onedrive_karthik:PhotoMind/library/   # processed output
+<output_remote>:PhotoMind/library/      # processed output
   └── 2024/12/                        # optional year/month structure
       └── 2024-12-25_*.jpg
 ```
@@ -301,15 +301,15 @@ thumbnails_path: /home/karthik/photomind/thumbnails
 tmp_path: /home/karthik/photomind/tmp
 
 sources:
-  - remote: onedrive_karthik
+  - remote: <your_rclone_remote>
     scan_path: Pictures/
-    label: Karthik's OneDrive
-  - remote: onedrive_wife
+    label: Primary OneDrive
+  - remote: <second_rclone_remote>
     scan_path: Pictures/
-    label: Priya's OneDrive
+    label: Secondary OneDrive
 
 output:
-  remote: onedrive_karthik
+  remote: <your_rclone_remote>
   path: PhotoMind/library/
 
 pipeline:

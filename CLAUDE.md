@@ -41,12 +41,12 @@ thumbnails_path: /home/karthik/photomind/thumbnails
 tmp_path: /home/karthik/photomind/tmp
 
 sources:
-  - remote: onedrive_karthik
+  - remote: <your_rclone_remote>
     scan_path: /Pictures
-    label: Karthik OneDrive
+    label: My OneDrive
 
 output:
-  remote: onedrive_karthik
+  remote: <your_rclone_remote>
   path: PhotoMind/library/
 
 pipeline:
@@ -179,8 +179,8 @@ cd backend && uv run pytest -k "test_name_pattern" -v
 ## VPS Access
 
 - SSH: `ssh karthik@<tailscale-ip>`
-- rclone remotes: `onedrive_karthik`, `onedrive_wife` (+ others in config.yaml)
-- PhotoMind library output: `onedrive_karthik:PhotoMind/library/`
+- rclone remotes: configured in `config.yaml` (gitignored)
+- PhotoMind library output: `<output_remote>:PhotoMind/library/`
 - Daemon managed by systemd: `systemctl status photomind-daemon`
 - ChromaDB path: `/home/karthik/photomind/chroma_db`
 - DB path: `/home/karthik/photomind/photomind.db`
