@@ -159,8 +159,8 @@ export default function LogsPage() {
     };
   }, [autoRefresh, fetchLogs]);
 
-  function handleActionChange(value: string) {
-    setActionFilter(value as ActionEnum | "ALL");
+  function handleActionChange(value: ActionEnum | "ALL" | null) {
+    setActionFilter(value ?? "ALL");
     setPage(1);
   }
 

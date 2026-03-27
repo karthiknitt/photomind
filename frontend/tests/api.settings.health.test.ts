@@ -36,7 +36,7 @@ globalThis.fetch = mockFetch as unknown as typeof fetch;
 
 async function callGet(): Promise<Response> {
   const { GET } = await import("@/app/api/settings/health/route");
-  const req = new Request("http://localhost/api/settings/health");
+  const req = new Request("http://localhost/api/settings/health") as Parameters<typeof GET>[0];
   return GET(req);
 }
 

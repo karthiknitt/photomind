@@ -80,7 +80,7 @@ async function patchRequest(id: string, body: unknown): Promise<Response> {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
-  });
+  }) as Parameters<typeof PATCH>[0];
   const params = Promise.resolve({ id });
   return PATCH(req, { params });
 }
@@ -91,7 +91,7 @@ async function patchRequestRaw(id: string, rawBody: string): Promise<Response> {
     method: "PATCH",
     headers: { "content-type": "application/json" },
     body: rawBody,
-  });
+  }) as Parameters<typeof PATCH>[0];
   const params = Promise.resolve({ id });
   return PATCH(req, { params });
 }

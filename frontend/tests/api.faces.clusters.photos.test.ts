@@ -106,7 +106,7 @@ function makeFace(photoId: string, clusterId: string, overrides: Partial<NewFace
 async function getPhotosRequest(id: string, queryParams = ""): Promise<Response> {
   const { GET } = await import("@/app/api/faces/clusters/[id]/photos/route");
   const url = `http://localhost/api/faces/clusters/${id}/photos${queryParams}`;
-  const req = new Request(url);
+  const req = new Request(url) as Parameters<typeof GET>[0];
   const params = Promise.resolve({ id });
   return GET(req, { params });
 }

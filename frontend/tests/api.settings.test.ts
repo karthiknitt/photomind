@@ -76,7 +76,7 @@ function makeSource(overrides: Partial<NewSource> = {}): NewSource {
 
 async function callGet(): Promise<Response> {
   const { GET } = await import("@/app/api/settings/route");
-  const req = new Request("http://localhost/api/settings");
+  const req = new Request("http://localhost/api/settings") as Parameters<typeof GET>[0];
   return GET(req);
 }
 
