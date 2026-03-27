@@ -10,13 +10,18 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 
 @dataclass
 class SourceConfig:
-    remote: str
-    scan_path: str
-    label: str
+    source_type: Literal["cloud", "local"] = "cloud"
+    # cloud fields (required when source_type == "cloud")
+    remote: str | None = None
+    scan_path: str | None = None
+    # local fields (required when source_type == "local")
+    local_path: str | None = None
+    label: str = ""
 
 
 @dataclass
@@ -106,14 +111,25 @@ def load_config(config_path: str | None = None) -> PhotoMindConfig:
     with open(path) as f:
         data = yaml.safe_load(f) or {}
 
-    sources = [
-        SourceConfig(
-            remote=s["remote"],
-            scan_path=s["scan_path"],
-            label=s.get("label", s["remote"]),
-        )
-        for s in data.get("sources", [])
-    ]
+    sources: list[SourceConfig] = []
+    for s in data.get("sources", []):
+        if "path" in s:
+            sources.append(
+                SourceConfig(
+                    source_type="local",
+                    local_path=s["path"],
+                    label=s.get("label", s["path"]),
+                )
+            )
+        else:
+            sources.append(
+                SourceConfig(
+                    source_type="cloud",
+                    remote=s["remote"],
+                    scan_path=s["scan_path"],
+                    label=s.get("label", s["remote"]),
+                )
+            )
 
     output_data = data.get("output", {})
     pipeline_data = data.get("pipeline", {})
