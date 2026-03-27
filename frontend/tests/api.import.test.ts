@@ -282,7 +282,11 @@ describe("POST /api/import — valid path", () => {
 
   it("calls unref() on the child process to detach it", async () => {
     let unrefCalled = false;
-    _spawnCell.result = { unref: () => { unrefCalled = true; } };
+    _spawnCell.result = {
+      unref: () => {
+        unrefCalled = true;
+      },
+    };
     await callPost({ localPath: "/media/usb/photos" });
     expect(unrefCalled).toBe(true);
   });
