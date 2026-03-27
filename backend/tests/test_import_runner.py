@@ -462,7 +462,6 @@ class TestCatastrophicFailure:
         db_path: Path,
         image_dir: Path,
         config: PhotoMindConfig,
-        chroma_mock: MagicMock,
     ) -> None:
         """If clip.get_chroma_collection raises, status becomes ERROR."""
         _seed_job(db_path, "job-crash", str(image_dir))
@@ -482,7 +481,6 @@ class TestCatastrophicFailure:
         db_path: Path,
         image_dir: Path,
         config: PhotoMindConfig,
-        chroma_mock: MagicMock,
     ) -> None:
         """finished_at must be set even when status is ERROR."""
         before = int(time.time())
@@ -505,7 +503,6 @@ class TestCatastrophicFailure:
         db_path: Path,
         image_dir: Path,
         config: PhotoMindConfig,
-        chroma_mock: MagicMock,
     ) -> None:
         """run_import_job must NOT propagate exceptions — caller thread must survive."""
         _seed_job(db_path, "job-no-raise", str(image_dir))
