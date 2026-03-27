@@ -126,6 +126,15 @@ def run_scan(config: PhotoMindConfig) -> None:
             # ------------------------------------------------------------------
             # Cloud source — use rclone
             # ------------------------------------------------------------------
+            # remote and scan_path are required for cloud sources; guard here
+            # so Pyright knows they are str (not str | None) for the rest of
+            # the block.
+            if source.remote is None or source.scan_path is None:
+                logger.error(
+                    "Cloud source %r is missing 'remote' or 'scan_path' — skipping",
+                    source.label,
+                )
+                continue
             logger.info(
                 "Scanning source %r at %s:%s",
                 source.label,
