@@ -19,7 +19,7 @@ from photomind.services.rclone_manager import (
     delete_remote,
     get_oauth_auth_url,
     list_remotes,
-    test_remote,
+    test_remote as check_remote_accessible,
 )
 
 
@@ -136,21 +136,21 @@ class TestListRemotes:
 class TestTestRemote:
     def test_returns_true_when_accessible(self) -> None:
         with patch("subprocess.run", return_value=_ok()):
-            assert test_remote("r2_test") is True
+            assert check_remote_accessible("r2_test") is True
 
     def test_returns_false_when_not_accessible(self) -> None:
         with patch("subprocess.run", return_value=_fail()):
-            assert test_remote("r2_test") is False
+            assert check_remote_accessible("r2_test") is False
 
     def test_does_not_raise_on_failure(self) -> None:
         with patch("subprocess.run", return_value=_fail(stderr="connection refused")):
             # Should return False, NOT raise
-            result = test_remote("bad_remote")
+            result = check_remote_accessible("bad_remote")
         assert result is False
 
     def test_calls_rclone_lsd(self) -> None:
         with patch("subprocess.run", return_value=_ok()) as mock_run:
-            test_remote("r2_test")
+            check_remote_accessible("r2_test")
 
         cmd = mock_run.call_args[0][0]
         assert cmd == ["rclone", "lsd", "r2_test:"]
