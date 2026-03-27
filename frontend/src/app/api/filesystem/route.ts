@@ -81,17 +81,15 @@ export function GET(req: NextRequest): NextResponse {
   }
 
   // Read directory entries
-  let dirents: ReturnType<typeof readdirSync>;
+  let dirents: import("node:fs").Dirent<string>[];
   try {
-    dirents = readdirSync(resolvedPath, { withFileTypes: true });
+    dirents = readdirSync(resolvedPath, { withFileTypes: true, encoding: "utf8" });
   } catch {
     return NextResponse.json({ error: "Cannot read directory" }, { status: 404 });
   }
 
   // Filter: directories only, no hidden entries
-  const entries: FilesystemEntry[] = (
-    dirents as Array<{ name: string; isDirectory: () => boolean }>
-  )
+  const entries: FilesystemEntry[] = dirents
     .filter((d) => d.isDirectory() && !d.name.startsWith("."))
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((d) => ({

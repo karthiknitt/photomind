@@ -86,7 +86,7 @@ mock.module("@/lib/db/client", () => ({
             _dbCell.jobs.filter((j) => {
               // The where condition uses eq(importJobs.id, id) — simulate by returning
               // the first job whose id matches _dbCell._whereId. We use a side-channel.
-              return j.id === _dbCell._whereId;
+              return j.id === (_dbCell as unknown as { _whereId?: string })._whereId;
             })
           ),
       }),
