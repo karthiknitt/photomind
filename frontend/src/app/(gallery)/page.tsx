@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { Pagination } from "@/components/pagination";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -454,27 +455,12 @@ export default function GalleryPage() {
           </div>
 
           {/* Pagination */}
-          <div className="mt-8 flex items-center justify-center gap-3">
-            <button
-              type="button"
-              onClick={() => fetchPage(page - 1)}
-              disabled={page <= 1 || loading}
-              className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            >
-              Previous
-            </button>
-            <span className="text-sm text-zinc-500 dark:text-zinc-400">
-              Page {page} of {Math.max(1, Math.ceil(data.pagination.total / LIMIT))}
-            </span>
-            <button
-              type="button"
-              onClick={() => fetchPage(page + 1)}
-              disabled={!data.pagination.hasMore || loading}
-              className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            >
-              Next
-            </button>
-          </div>
+          <Pagination
+            page={page}
+            totalPages={Math.max(1, Math.ceil(data.pagination.total / LIMIT))}
+            onPageChange={fetchPage}
+            disabled={loading}
+          />
         </>
       )}
 

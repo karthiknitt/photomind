@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function GalleryLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -12,6 +13,7 @@ export default function GalleryLayout({ children }: { children: React.ReactNode 
             PhotoMind
           </Link>
           <nav className="flex items-center gap-4 text-sm font-medium text-zinc-600 dark:text-zinc-400">
+            <ThemeToggle />
             <Link
               href="/"
               className="transition-colors hover:text-zinc-900 dark:hover:text-zinc-50"
