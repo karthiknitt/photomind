@@ -100,13 +100,20 @@ def run_scan(config: PhotoMindConfig) -> None:
             )
             continue
 
+        # rclone lsjson returns paths relative to the scan root.
+        # Reconstruct the full remote path for download and DB storage.
+        scan_root = source.scan_path.rstrip("/")
+
+        def full_path(rf_path: str) -> str:
+            return f"{scan_root}/{rf_path}"
+
         # Filter: images only, not already in DB
         new_files = [
             rf
             for rf in remote_files
             if not rf.is_dir
             and _is_image(rf.name)
-            and (source.remote, rf.path) not in known_source_paths
+            and (source.remote, full_path(rf.path)) not in known_source_paths
         ]
 
         skipped = len(remote_files) - len(new_files)
@@ -124,7 +131,7 @@ def run_scan(config: PhotoMindConfig) -> None:
             process_photo(
                 config=config,
                 source_remote=source.remote,
-                source_path=rf.path,
+                source_path=full_path(rf.path),
                 db_path=db_path,
                 chroma_collection=chroma_collection,
                 known_phashes=known_phashes,
