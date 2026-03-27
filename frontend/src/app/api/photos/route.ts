@@ -1,11 +1,11 @@
-import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, lte, sql } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/client";
 import { photos } from "@/lib/db/schema";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const VALID_STATUSES = ["QUEUED", "PROCESSING", "DONE", "ERROR"] as const;
+const VALID_STATUSES = ["QUEUED", "PROCESSING", "DONE", "SKIPPED", "ERROR"] as const;
 type PhotoStatus = (typeof VALID_STATUSES)[number];
 
 const DEFAULT_PAGE = 1;
@@ -108,8 +108,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   // 2. Build where conditions
+  // For DONE status, also require library_path IS NOT NULL to exclude memes/duplicates
+  // that were bailed out before reaching the upload stage.
   const conditions = [
     eq(photos.status, status),
+    ...(status === "DONE" ? [isNotNull(photos.libraryPath)] : []),
     ...(fromTs !== null ? [gte(photos.dateTaken, fromTs)] : []),
     ...(toTs !== null ? [lte(photos.dateTaken, toTs)] : []),
   ];

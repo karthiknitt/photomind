@@ -379,7 +379,7 @@ class TestMemeBailOut:
 
         row = _read_photo(dirs["db"], photo_id)
         assert row is not None
-        assert row["status"] == "DONE"
+        assert row["status"] == "SKIPPED"
         assert row["is_meme"] == 1
         upload_mock.assert_not_called()
 
@@ -451,7 +451,7 @@ class TestDedupBailOut:
 
         row = _read_photo(dirs["db"], photo_id)
         assert row is not None
-        assert row["status"] == "DONE"
+        assert row["status"] == "SKIPPED"
         upload_mock.assert_not_called()
 
     def test_duplicate_logged_in_action_log(

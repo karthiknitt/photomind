@@ -241,7 +241,7 @@ def process_photo(
         logger.info("[%s] Done → %s", photo_id, final_name)
 
     except _BailOut as bail:
-        update_photo(db_path, photo_id, status="DONE")
+        update_photo(db_path, photo_id, status="SKIPPED")
         log_action(db, bail.action, photo_id=photo_id, detail=bail.detail)
         logger.info("[%s] Bail-out: %s", photo_id, bail.action)
 

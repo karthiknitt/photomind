@@ -104,8 +104,8 @@ def run_scan(config: PhotoMindConfig) -> None:
         # Reconstruct the full remote path for download and DB storage.
         scan_root = source.scan_path.rstrip("/")
 
-        def full_path(rf_path: str) -> str:
-            return f"{scan_root}/{rf_path}"
+        def full_path(rf_path: str, _root: str = scan_root) -> str:
+            return f"{_root}/{rf_path}"
 
         # Filter: images only, not already in DB
         new_files = [

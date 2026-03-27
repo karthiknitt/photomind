@@ -62,6 +62,7 @@ function makePhoto(overrides: Partial<NewPhoto> = {}): NewPhoto {
     id: crypto.randomUUID(),
     sourceRemote: "onedrive_test",
     sourcePath: "/test/photo.jpg",
+    libraryPath: "PhotoMind/library/2024/01/photo.jpg",
     status: "DONE",
     createdAt: Math.floor(Date.now() / 1000),
     updatedAt: Math.floor(Date.now() / 1000),

@@ -27,7 +27,7 @@ export const photos = sqliteTable("photos", {
   clipIndexed: integer("clip_indexed", { mode: "boolean" }).default(false),
   faceCount: integer("face_count").default(0),
   status: text("status", {
-    enum: ["QUEUED", "PROCESSING", "DONE", "ERROR"],
+    enum: ["QUEUED", "PROCESSING", "DONE", "SKIPPED", "ERROR"],
   })
     .notNull()
     .default("QUEUED"),

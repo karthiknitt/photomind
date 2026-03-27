@@ -175,7 +175,7 @@ class TestRunScanNewFiles:
             run_scan(config)
 
         _, kwargs = mock_process.call_args
-        assert kwargs["source_path"] == "2024/IMG_001.jpg"
+        assert kwargs["source_path"] == "/Pictures/2024/IMG_001.jpg"
 
     def test_directories_are_skipped(
         self,
@@ -238,7 +238,7 @@ class TestRunScanSkipsKnown:
             PhotoRecord(
                 id="existing-uuid",
                 source_remote="onedrive_karthik",
-                source_path="2024/IMG_001.jpg",
+                source_path="/Pictures/2024/IMG_001.jpg",
                 status="DONE",
                 created_at=now,
                 updated_at=now,
@@ -269,7 +269,7 @@ class TestRunScanSkipsKnown:
             PhotoRecord(
                 id="existing-uuid",
                 source_remote="onedrive_karthik",
-                source_path="2024/IMG_001.jpg",
+                source_path="/Pictures/2024/IMG_001.jpg",
                 status="DONE",
                 created_at=now,
                 updated_at=now,
@@ -290,7 +290,7 @@ class TestRunScanSkipsKnown:
 
         assert mock_process.call_count == 1
         _, kwargs = mock_process.call_args
-        assert kwargs["source_path"] == "2024/IMG_002.jpg"
+        assert kwargs["source_path"] == "/Pictures/2024/IMG_002.jpg"
 
 
 # ---------------------------------------------------------------------------
