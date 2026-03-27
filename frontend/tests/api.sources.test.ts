@@ -63,8 +63,7 @@ const _cpCell: {
 // Also include a `default` export so CJS-style `import fs from 'node:fs'` works.
 mock.module("node:fs", () => {
   const mod = {
-    existsSync: (p: string) =>
-      _fsCell.existsSync ? _fsCell.existsSync(p) : _realFs.existsSync(p),
+    existsSync: (p: string) => (_fsCell.existsSync ? _fsCell.existsSync(p) : _realFs.existsSync(p)),
     readFileSync: (p: string, enc: BufferEncoding) =>
       _fsCell.readFileSync
         ? _fsCell.readFileSync(p, enc)

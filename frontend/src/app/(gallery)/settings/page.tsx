@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AddCloudSource } from "@/components/add-cloud-source";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,18 +23,17 @@ interface SystemConfig {
   clipBridgeUrl: string;
 }
 
-interface SourceRow {
-  id: string;
-  remoteName: string;
-  displayName: string;
-  scanPath: string;
-  lastScannedAt: number | null;
-  enabled: boolean;
+// Source as returned by GET /api/sources
+interface ApiSourceRow {
+  remote: string;
+  label: string;
+  scan_path: string;
+  provider: string;
+  status: "active";
 }
 
 interface SettingsData {
   system: SystemConfig;
-  sources: SourceRow[];
 }
 
 interface BridgeOk {
@@ -54,17 +54,6 @@ type HealthCheckState =
   | { phase: "idle" }
   | { phase: "checking" }
   | { phase: "done"; bridge: BridgeStatus };
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatLastScanned(ts: number | null): string {
-  if (ts === null) return "Never";
-  return new Date(ts * 1000).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -194,60 +183,173 @@ function BridgeHealthCard({ clipBridgeUrl }: { clipBridgeUrl: string }) {
   );
 }
 
-function PhotoSourcesCard({ sources }: { sources: SourceRow[] }) {
+// ── Skeleton rows for loading state ──────────────────────────────────────────
+
+function SkeletonRows() {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Photo Sources</CardTitle>
-        <CardDescription>rclone remotes scanned by the PhotoMind daemon.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        {sources.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4 text-center">
-            No photo sources configured. Add sources to{" "}
-            <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">config.yaml</code>{" "}
-            and restart the daemon.
-          </p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Remote</TableHead>
-                <TableHead>Display Name</TableHead>
-                <TableHead>Scan Path</TableHead>
-                <TableHead>Last Scanned</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sources.map((source) => (
-                <TableRow key={source.id}>
-                  <TableCell className="font-mono text-xs text-muted-foreground">
-                    {source.remoteName}
-                  </TableCell>
-                  <TableCell className="font-medium text-foreground">
-                    {source.displayName}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">
-                    {source.scanPath}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {formatLastScanned(source.lastScannedAt)}
-                  </TableCell>
-                  <TableCell>
-                    {source.enabled ? (
-                      <Badge variant="secondary">Enabled</Badge>
-                    ) : (
-                      <Badge variant="outline">Disabled</Badge>
-                    )}
-                  </TableCell>
+    <>
+      {[1, 2].map((i) => (
+        <TableRow key={i}>
+          <TableCell>
+            <div className="h-3 w-32 rounded bg-muted animate-pulse" />
+          </TableCell>
+          <TableCell>
+            <div className="h-3 w-24 rounded bg-muted animate-pulse" />
+          </TableCell>
+          <TableCell>
+            <div className="h-3 w-20 rounded bg-muted animate-pulse" />
+          </TableCell>
+          <TableCell>
+            <div className="h-5 w-14 rounded bg-muted animate-pulse" />
+          </TableCell>
+          <TableCell>
+            <div className="h-6 w-6 rounded bg-muted animate-pulse" />
+          </TableCell>
+        </TableRow>
+      ))}
+    </>
+  );
+}
+
+function PhotoSourcesCard() {
+  const [sources, setSources] = useState<ApiSourceRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+
+  const fetchSources = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/sources");
+      if (!res.ok) throw new Error(`API error ${res.status}`);
+      const data = (await res.json()) as { sources: ApiSourceRow[] };
+      setSources(data.sources);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load sources");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchSources();
+  }, [fetchSources]);
+
+  async function handleDelete(remote: string) {
+    const confirmed = confirm(
+      `Remove source "${remote}"? This will delete its rclone config and stop scanning it.`
+    );
+    if (!confirmed) return;
+
+    setDeleting(remote);
+    try {
+      const res = await fetch("/api/sources", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: remote }),
+      });
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        alert(data.error ?? "Failed to delete source");
+        return;
+      }
+      await fetchSources();
+    } catch {
+      alert("Network error while deleting source");
+    } finally {
+      setDeleting(null);
+    }
+  }
+
+  return (
+    <>
+      <Card>
+        <CardHeader className="flex flex-row items-start justify-between gap-4">
+          <div>
+            <CardTitle>Photo Sources</CardTitle>
+            <CardDescription>rclone remotes scanned by the PhotoMind daemon.</CardDescription>
+          </div>
+          <Button size="sm" onClick={() => setAddOpen(true)}>
+            + Add Cloud Source
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {error && <p className="text-sm text-destructive py-2">{error}</p>}
+          {!error && !loading && sources.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              No photo sources configured yet.{" "}
+              <button
+                type="button"
+                onClick={() => setAddOpen(true)}
+                className="text-primary underline underline-offset-2 hover:opacity-80"
+              >
+                Add a cloud source
+              </button>{" "}
+              to start scanning.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Remote Name</TableHead>
+                  <TableHead>Provider</TableHead>
+                  <TableHead>Scan Path</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-10" />
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
-    </Card>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <SkeletonRows />
+                ) : (
+                  sources.map((source) => (
+                    <TableRow key={source.remote}>
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        {source.remote}
+                      </TableCell>
+                      <TableCell className="font-medium text-foreground">
+                        {source.provider}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        {source.scan_path}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">
+                          {source.status === "active" ? "Active" : source.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <button
+                          type="button"
+                          onClick={() => void handleDelete(source.remote)}
+                          disabled={deleting === source.remote}
+                          aria-label={`Remove ${source.remote}`}
+                          className="flex size-6 items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40"
+                        >
+                          {deleting === source.remote ? (
+                            <span className="text-xs">…</span>
+                          ) : (
+                            <span aria-hidden="true">✕</span>
+                          )}
+                        </button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <AddCloudSource
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        onSuccess={() => void fetchSources()}
+      />
+    </>
   );
 }
 
@@ -287,7 +389,7 @@ export default function SettingsPage() {
 
       <BridgeHealthCard clipBridgeUrl={settings.system.clipBridgeUrl} />
 
-      <PhotoSourcesCard sources={settings.sources} />
+      <PhotoSourcesCard />
     </div>
   );
 }
