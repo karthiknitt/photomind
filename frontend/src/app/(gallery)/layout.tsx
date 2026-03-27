@@ -24,6 +24,12 @@ export default function GalleryLayout({ children }: { children: React.ReactNode 
             >
               Search
             </Link>
+            <Link
+              href="/settings"
+              className="transition-colors hover:text-zinc-900 dark:hover:text-zinc-50"
+            >
+              Settings
+            </Link>
           </nav>
         </div>
       </header>
