@@ -122,6 +122,10 @@ def load_config(config_path: str | None = None) -> PhotoMindConfig:
                 )
             )
         else:
+            if "remote" not in s or "scan_path" not in s:
+                raise ValueError(
+                    f"Cloud source entry is missing 'remote' or 'scan_path': {s}"
+                )
             sources.append(
                 SourceConfig(
                     source_type="cloud",
@@ -137,11 +141,12 @@ def load_config(config_path: str | None = None) -> PhotoMindConfig:
     insightface_data = data.get("insightface", {})
     daemon_data = data.get("daemon", {})
 
+    _defaults = PhotoMindConfig()
     return PhotoMindConfig(
-        database_path=data.get("database_path", PhotoMindConfig().database_path),
-        chroma_db_path=data.get("chroma_db_path", PhotoMindConfig().chroma_db_path),
-        thumbnails_path=data.get("thumbnails_path", PhotoMindConfig().thumbnails_path),
-        tmp_path=data.get("tmp_path", PhotoMindConfig().tmp_path),
+        database_path=data.get("database_path", _defaults.database_path),
+        chroma_db_path=data.get("chroma_db_path", _defaults.chroma_db_path),
+        thumbnails_path=data.get("thumbnails_path", _defaults.thumbnails_path),
+        tmp_path=data.get("tmp_path", _defaults.tmp_path),
         sources=sources,
         output=OutputConfig(
             remote=output_data.get("remote", "onedrive_karthik"),

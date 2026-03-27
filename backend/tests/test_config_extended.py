@@ -177,3 +177,21 @@ def test_load_config_mixed_sources(tmp_path: Path) -> None:
     assert hdd.source_type == "local"
     assert hdd.local_path == "/mnt/hdd/Photos"
     assert hdd.label == "/mnt/hdd/Photos"  # defaults to path
+
+
+# ---------------------------------------------------------------------------
+# load_config — malformed source entry
+# ---------------------------------------------------------------------------
+
+
+def test_load_config_malformed_source_raises(tmp_path: Path) -> None:
+    """Cloud source missing 'remote' raises ValueError with a helpful message."""
+    path = write_config(
+        tmp_path,
+        """
+        sources:
+          - label: Orphaned entry
+        """,
+    )
+    with pytest.raises(ValueError, match="remote"):
+        load_config(str(path))
