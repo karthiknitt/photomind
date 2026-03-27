@@ -17,7 +17,14 @@
  */
 
 import { mock } from "bun:test";
+import { createRequire } from "node:module";
 import { beforeEach, describe, expect, it } from "vitest";
+
+// ─── Capture real node:fs BEFORE mocking ──────────────────────────────────────
+// This allows the mock to forward non-config-yaml calls (e.g. drizzle migration
+// JSON reads) to the real fs, preventing cross-file test pollution.
+const _realRequire = createRequire(import.meta.url);
+const _realFs = _realRequire("node:fs") as typeof import("node:fs");
 
 // ─── Mutable cells ────────────────────────────────────────────────────────────
 
@@ -28,14 +35,15 @@ interface SpawnSyncResult {
   error?: Error;
 }
 
+// When null, the mock falls through to the real fs function.
 const _fsCell: {
-  existsSync: (p: string) => boolean;
-  readFileSync: (p: string, enc: string) => string;
-  writeFileSync: (p: string, data: string) => void;
+  existsSync: ((p: string) => boolean) | null;
+  readFileSync: ((p: string, enc: BufferEncoding) => string) | null;
+  writeFileSync: ((p: string, data: string) => void) | null;
 } = {
-  existsSync: () => false,
-  readFileSync: () => "",
-  writeFileSync: () => {},
+  existsSync: null,
+  readFileSync: null,
+  writeFileSync: null,
 };
 
 const _cpCell: {
@@ -48,17 +56,53 @@ const _cpCell: {
   }),
 };
 
-// Mock node:fs
-mock.module("node:fs", () => ({
-  existsSync: (p: string) => _fsCell.existsSync(p),
-  readFileSync: (p: string, enc: string) => _fsCell.readFileSync(p, enc),
-  writeFileSync: (p: string, data: string) => _fsCell.writeFileSync(p, data),
-}));
+// Mock node:fs — expose full union of exports used across all test files to avoid
+// mock.module collision when tests run in the same bun:test worker.
+// Falls through to real node:fs for any function not overridden by a cell,
+// so drizzle migration reads and other internal node:fs uses are unaffected.
+// Also include a `default` export so CJS-style `import fs from 'node:fs'` works.
+mock.module("node:fs", () => {
+  const mod = {
+    existsSync: (p: string) =>
+      _fsCell.existsSync ? _fsCell.existsSync(p) : _realFs.existsSync(p),
+    readFileSync: (p: string, enc: BufferEncoding) =>
+      _fsCell.readFileSync
+        ? _fsCell.readFileSync(p, enc)
+        : (_realFs.readFileSync(p, enc) as string),
+    writeFileSync: (p: string, data: string) =>
+      _fsCell.writeFileSync ? _fsCell.writeFileSync(p, data) : _realFs.writeFileSync(p, data),
+    // Stubs for exports used by filesystem/route.ts and import/route.ts
+    readdirSync: (...args: Parameters<typeof _realFs.readdirSync>) =>
+      // biome-ignore lint/suspicious/noExplicitAny: pass-through
+      (_realFs.readdirSync as any)(...args),
+    statSync: (...args: Parameters<typeof _realFs.statSync>) =>
+      // biome-ignore lint/suspicious/noExplicitAny: pass-through
+      (_realFs.statSync as any)(...args),
+  };
+  return { ...mod, default: mod };
+});
 
-// Mock node:child_process
+// Mock node:child_process — expose full union of exports (spawnSync + spawn)
 mock.module("node:child_process", () => ({
   spawnSync: (cmd: string, args: string[], opts?: object) => _cpCell.spawnSync(cmd, args, opts),
+  // Stub for spawn used by import/route.ts
+  spawn: () => ({ unref: () => {} }),
 }));
+
+// ─── Global reset ─────────────────────────────────────────────────────────────
+// Reset cells to null before each test so unrelated tests fall through to the
+// real node:fs (e.g. drizzle migration reads in other test files are unaffected).
+
+beforeEach(() => {
+  _fsCell.existsSync = null;
+  _fsCell.readFileSync = null;
+  _fsCell.writeFileSync = null;
+  _cpCell.spawnSync = () => ({
+    status: 0,
+    stdout: Buffer.from(""),
+    stderr: Buffer.from(""),
+  });
+});
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
