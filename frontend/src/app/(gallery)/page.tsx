@@ -28,7 +28,7 @@ interface PhotoRow {
   createdAt: number;
 }
 
-interface Pagination {
+interface PaginationMeta {
   page: number;
   limit: number;
   total: number;
@@ -37,7 +37,7 @@ interface Pagination {
 
 interface PhotosResponse {
   photos: PhotoRow[];
-  pagination: Pagination;
+  pagination: PaginationMeta;
 }
 
 interface FaceDetail {
