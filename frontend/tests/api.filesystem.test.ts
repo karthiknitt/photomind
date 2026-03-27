@@ -147,10 +147,7 @@ describe("GET /api/filesystem — valid paths", () => {
   });
 
   it("returns subdirectories under /media", async () => {
-    _fsCell.readdirSync = () => [
-      makeDirent("usb", true),
-      makeDirent("cdrom", true),
-    ];
+    _fsCell.readdirSync = () => [makeDirent("usb", true), makeDirent("cdrom", true)];
 
     const res = await callGet("path=/media");
     expect(res.status).toBe(200);
@@ -165,10 +162,7 @@ describe("GET /api/filesystem — valid paths", () => {
   });
 
   it("returns subdirectories under /mnt/hdd", async () => {
-    _fsCell.readdirSync = () => [
-      makeDirent("photos", true),
-      makeDirent("videos", true),
-    ];
+    _fsCell.readdirSync = () => [makeDirent("photos", true), makeDirent("videos", true)];
 
     const res = await callGet("path=/mnt/hdd");
     expect(res.status).toBe(200);
@@ -348,10 +342,7 @@ describe("GET /api/filesystem — filtering", () => {
   });
 
   it("returns empty entries when directory has no visible subdirs", async () => {
-    _fsCell.readdirSync = () => [
-      makeDirent("photo.jpg", false),
-      makeDirent(".dotfolder", true),
-    ];
+    _fsCell.readdirSync = () => [makeDirent("photo.jpg", false), makeDirent(".dotfolder", true)];
 
     const res = await callGet("path=/media/usb");
     const data = await res.json();
