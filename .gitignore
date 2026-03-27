@@ -52,6 +52,9 @@ Thumbs.db
 # Logs
 *.log
 logs/
+# Allow frontend app route and page dirs named "logs"
+!frontend/src/app/**/logs/
+!frontend/src/app/**/logs/**
 
 # Worktrees (local only)
 .worktrees/
