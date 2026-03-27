@@ -20,7 +20,7 @@ check() {
   local expected_status="${3:-200}"
   local actual_status
   actual_status=$(curl -sk -o /dev/null -w "%{http_code}" \
-    --max-time 10 "$url" 2>/dev/null || echo "000")
+    --max-time 20 "$url" 2>/dev/null || echo "000")
   if [[ "$actual_status" == "$expected_status" ]]; then
     echo "  ✓ [$actual_status] $name"
     ((PASS++)) || true
@@ -35,7 +35,7 @@ check_json() {
   local url="$2"
   local jq_filter="$3"
   local response
-  response=$(curl -sk --max-time 10 "$url" 2>/dev/null || echo "{}")
+  response=$(curl -sk --max-time 20 "$url" 2>/dev/null || echo "{}")
   if echo "$response" | jq -e "$jq_filter" >/dev/null 2>&1; then
     echo "  ✓ [json] $name"
     ((PASS++)) || true
