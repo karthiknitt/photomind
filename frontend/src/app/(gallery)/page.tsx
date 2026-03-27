@@ -53,6 +53,7 @@ interface FaceDetail {
 interface PhotoDetail {
   id: string;
   filenameFinal: string | null;
+  libraryPath: string | null;
   dateTaken: number | null;
   city: string | null;
   state: string | null;
@@ -146,10 +147,10 @@ function PhotoDetailDialog({
         if (!isOpen) onClose();
       }}
     >
-      <DialogContent className="max-w-4xl w-full max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent className="max-w-5xl w-full max-h-[92vh] overflow-y-auto p-0">
         <div className="flex flex-col md:flex-row h-full">
           {/* Left: large thumbnail */}
-          <div className="relative flex-1 min-h-64 bg-zinc-900 flex items-center justify-center md:max-h-[90vh]">
+          <div className="relative flex-1 min-h-[50vw] md:min-h-0 md:h-[80vh] bg-zinc-900 flex items-center justify-center">
             {loading && (
               <div className="flex items-center justify-center p-12 text-zinc-500">
                 <span className="text-sm">Loading…</span>
@@ -196,6 +197,22 @@ function PhotoDetailDialog({
 
             {!loading && photo && (
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 text-sm text-zinc-700 dark:text-zinc-300">
+                {/* Library path */}
+                {photo.libraryPath && (
+                  <div className="flex justify-between gap-4">
+                    <span className="text-zinc-500 dark:text-zinc-400 shrink-0">Library</span>
+                    <a
+                      href={`/api/photos/${photo.id}/raw`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={photo.libraryPath}
+                      className="text-right text-blue-600 dark:text-blue-400 hover:underline truncate text-xs"
+                    >
+                      {photo.libraryPath.split("/").pop()}
+                    </a>
+                  </div>
+                )}
+
                 {/* Date */}
                 <MetaRow label="Date" value={formatDate(photo.dateTaken)} />
 

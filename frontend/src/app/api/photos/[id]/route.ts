@@ -19,6 +19,7 @@ interface FaceRow {
 interface PhotoDetail {
   id: string;
   filenameFinal: string | null;
+  libraryPath: string | null;
   dateTaken: number | null;
   city: string | null;
   state: string | null;
@@ -56,6 +57,7 @@ export async function GET(
       .select({
         id: photos.id,
         filenameFinal: photos.filenameFinal,
+        libraryPath: photos.libraryPath,
         dateTaken: photos.dateTaken,
         city: photos.city,
         state: photos.state,
