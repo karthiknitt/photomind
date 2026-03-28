@@ -6,7 +6,7 @@ run_scan() performs one full scan cycle:
   2. Load known source paths from DB (pre-batch, O(1) per file lookup)
   3. Load known pHashes + existing filenames for dedup/rename
   4. For each configured source:
-     a. List all files recursively via rclone
+     a. List all files recursively via rclone (cloud) or local_scanner (local)
      b. Filter: images only, not yet in DB
      c. Process each file through the 15-stage pipeline
   5. Rclone errors for a single source are logged and skipped; other
@@ -22,7 +22,7 @@ import logging
 from pathlib import Path
 
 from photomind.config import PhotoMindConfig
-from photomind.services import clip, rclone
+from photomind.services import clip, local_scanner, rclone
 from photomind.services.photos_db import (
     get_existing_filenames,
     get_phashes,
@@ -81,62 +81,116 @@ def run_scan(config: PhotoMindConfig) -> None:
     total_skipped = 0
 
     for source in config.sources:
-        logger.info(
-            "Scanning source %r at %s:%s",
-            source.label,
-            source.remote,
-            source.scan_path,
-        )
-
-        try:
-            remote_files = rclone.list_files(
-                source.remote, source.scan_path, recursive=True
-            )
-        except RcloneError as exc:
-            logger.error(
-                "rclone list failed for source %r — skipping: %s",
+        if source.source_type == "local":
+            # ------------------------------------------------------------------
+            # Local filesystem source — use os.walk-based scanner
+            # ------------------------------------------------------------------
+            assert source.local_path is not None
+            source_key = f"local:{source.local_path}"
+            logger.info(
+                "Scanning local source %r at %s",
                 source.label,
-                exc,
+                source.local_path,
             )
-            continue
 
-        # rclone lsjson returns paths relative to the scan root.
-        # Reconstruct the full remote path for download and DB storage.
-        scan_root = source.scan_path.rstrip("/")
+            all_local = local_scanner.list_local_files(source.local_path)
 
-        def full_path(rf_path: str, _root: str = scan_root) -> str:
-            return f"{_root}/{rf_path}"
+            new_local = [
+                lf
+                for lf in all_local
+                if (source_key, lf.path) not in known_source_paths
+            ]
 
-        # Filter: images only, not already in DB
-        new_files = [
-            rf
-            for rf in remote_files
-            if not rf.is_dir
-            and _is_image(rf.name)
-            and (source.remote, full_path(rf.path)) not in known_source_paths
-        ]
+            skipped = len(all_local) - len(new_local)
+            total_skipped += skipped
+            total_new += len(new_local)
 
-        skipped = len(remote_files) - len(new_files)
-        total_skipped += skipped
-        total_new += len(new_files)
-
-        logger.info(
-            "Source %r: %d new file(s), %d skipped (already processed or non-image)",
-            source.label,
-            len(new_files),
-            skipped,
-        )
-
-        for rf in new_files:
-            process_photo(
-                config=config,
-                source_remote=source.remote,
-                source_path=full_path(rf.path),
-                db_path=db_path,
-                chroma_collection=chroma_collection,
-                known_phashes=known_phashes,
-                existing_filenames=existing_filenames,
+            logger.info(
+                "Source %r: %d new file(s), %d skipped (already processed)",
+                source.label,
+                len(new_local),
+                skipped,
             )
+
+            for lf in new_local:
+                process_photo(
+                    config=config,
+                    source_remote=source_key,
+                    source_path=lf.path,
+                    db_path=db_path,
+                    chroma_collection=chroma_collection,
+                    known_phashes=known_phashes,
+                    existing_filenames=existing_filenames,
+                )
+        else:
+            # ------------------------------------------------------------------
+            # Cloud source — use rclone
+            # ------------------------------------------------------------------
+            # remote and scan_path are required for cloud sources; guard here
+            # so Pyright knows they are str (not str | None) for the rest of
+            # the block.
+            if source.remote is None or source.scan_path is None:
+                logger.error(
+                    "Cloud source %r is missing 'remote' or 'scan_path' — skipping",
+                    source.label,
+                )
+                continue
+            logger.info(
+                "Scanning source %r at %s:%s",
+                source.label,
+                source.remote,
+                source.scan_path,
+            )
+
+            try:
+                remote_files = rclone.list_files(
+                    source.remote, source.scan_path, recursive=True
+                )
+            except RcloneError as exc:
+                logger.error(
+                    "rclone list failed for source %r — skipping: %s",
+                    source.label,
+                    exc,
+                )
+                continue
+
+            # rclone lsjson returns paths relative to the scan root.
+            # Reconstruct the full remote path for download and DB storage.
+            scan_root = source.scan_path.rstrip("/")
+
+            def full_path(rf_path: str, _root: str = scan_root) -> str:
+                return f"{_root}/{rf_path}"
+
+            # Filter: images only, not already in DB
+            new_files = [
+                rf
+                for rf in remote_files
+                if not rf.is_dir
+                and _is_image(rf.name)
+                and (source.remote, full_path(rf.path)) not in known_source_paths
+            ]
+
+            skipped = len(remote_files) - len(new_files)
+            total_skipped += skipped
+            total_new += len(new_files)
+
+            logger.info(
+                "Source %r: %d new file(s), %d skipped (already processed or non-image)",  # noqa: E501
+                source.label,
+                len(new_files),
+                skipped,
+            )
+
+            for rf in new_files:
+                process_photo(
+                    config=config,
+                    source_remote=source.remote,
+                    source_path=full_path(rf.path),
+                    db_path=db_path,
+                    chroma_collection=chroma_collection,
+                    known_phashes=known_phashes,
+                    existing_filenames=existing_filenames,
+                )
 
     logger.info(
         "Scan complete — %d new file(s) processed, %d skipped",

@@ -116,6 +116,20 @@ export const sources = sqliteTable("sources", {
   enabled: integer("enabled", { mode: "boolean" }).default(true),
 });
 
+// ─── import_jobs ──────────────────────────────────────────────────────────────
+
+export const importJobs = sqliteTable("import_jobs", {
+  id: text("id").primaryKey(),
+  status: text("status").notNull().default("RUNNING"), // RUNNING | DONE | ERROR
+  localPath: text("local_path").notNull(),
+  label: text("label"),
+  totalCount: integer("total_count"),
+  processedCount: integer("processed_count").notNull().default(0),
+  errorCount: integer("error_count").notNull().default(0),
+  createdAt: integer("created_at").notNull(),
+  finishedAt: integer("finished_at"),
+});
+
 // ─── Type exports ─────────────────────────────────────────────────────────────
 
 export type Photo = typeof photos.$inferSelect;
@@ -132,3 +146,5 @@ export type ActionLog = typeof actionLog.$inferSelect;
 export type NewActionLog = typeof actionLog.$inferInsert;
 export type Source = typeof sources.$inferSelect;
 export type NewSource = typeof sources.$inferInsert;
+export type ImportJob = typeof importJobs.$inferSelect;
+export type NewImportJob = typeof importJobs.$inferInsert;
