@@ -94,12 +94,8 @@
           "name": "events_cover_photo_id_photos_id_fk",
           "tableFrom": "events",
           "tableTo": "photos",
-          "columnsFrom": [
-            "cover_photo_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["cover_photo_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -220,12 +216,8 @@
           "name": "faces_photo_id_photos_id_fk",
           "tableFrom": "faces",
           "tableTo": "photos",
-          "columnsFrom": [
-            "photo_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["photo_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -233,12 +225,8 @@
           "name": "faces_cluster_id_face_clusters_id_fk",
           "tableFrom": "faces",
           "tableTo": "face_clusters",
-          "columnsFrom": [
-            "cluster_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["cluster_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -369,12 +357,8 @@
           "name": "photo_tags_photo_id_photos_id_fk",
           "tableFrom": "photo_tags",
           "tableTo": "photos",
-          "columnsFrom": [
-            "photo_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["photo_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
