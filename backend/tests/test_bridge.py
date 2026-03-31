@@ -13,8 +13,10 @@ Coverage:
 
 from __future__ import annotations
 
+import math
 from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
@@ -267,10 +269,6 @@ class TestEmbedText:
 # POST /faces/centroid-similar tests
 # ---------------------------------------------------------------------------
 
-import math
-
-import numpy as np
-
 _FACES_CHROMA = "photomind.bridge.main.get_chroma_collection"
 
 
@@ -354,12 +352,14 @@ class TestCentroidSimilar:
         call_kwargs = mock_collection.query.call_args[1]
         centroid = np.array(call_kwargs["query_embeddings"][0])
         norm = float(np.linalg.norm(centroid))
-        assert math.isclose(norm, 1.0, abs_tol=1e-5), f"centroid norm={norm} (expected 1.0)"
+        assert math.isclose(norm, 1.0, abs_tol=1e-5), (
+            f"centroid norm={norm} (expected 1.0)"
+        )
 
     def test_returns_400_when_collection_has_no_embeddings(
         self, client: TestClient
     ) -> None:
-        """When ChromaDB returns no embeddings, response is 400 (cannot compute centroid)."""
+        """Return 400 when ChromaDB has no embeddings for given IDs."""
         mock_collection = MagicMock()
         mock_collection.get.return_value = {"embeddings": None, "ids": []}
 

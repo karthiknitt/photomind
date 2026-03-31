@@ -233,6 +233,14 @@ export default function FacesPage() {
   const handleLabelSaved = useCallback((id: string, newLabel: string | null) => {
     setData((prev) => {
       if (!prev) return prev;
+      const cluster = prev.clusters.find((c) => c.id === id);
+      const wasUnlabeled = cluster?.label == null;
+      const isNowLabeled = newLabel != null;
+      if (wasUnlabeled && isNowLabeled) {
+        setUnlabeledCount((n) => Math.max(0, n - 1));
+      } else if (!wasUnlabeled && !isNowLabeled) {
+        setUnlabeledCount((n) => n + 1);
+      }
       return {
         ...prev,
         clusters: prev.clusters.map((c) => (c.id === id ? { ...c, label: newLabel } : c)),

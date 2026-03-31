@@ -101,7 +101,7 @@ async def centroid_similar(body: CentroidSimilarRequest) -> dict[str, Any]:
 
         results = [
             {"id": fid, "distance": dist}
-            for fid, dist in zip(ids, distances)
+            for fid, dist in zip(ids, distances, strict=True)
             if fid not in exclude_set
         ]
 

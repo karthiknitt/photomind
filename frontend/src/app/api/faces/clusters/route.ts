@@ -1,4 +1,4 @@
-import { and, desc, gt, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, count, desc, gt, isNotNull, isNull, sql } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/client";
 import { faceClusters } from "@/lib/db/schema";
@@ -60,7 +60,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       query = query.limit(limit);
     }
 
-    const rows = await query;
+    const [rows, [countRow]] = await Promise.all([
+      query,
+      db.select({ total: count() }).from(faceClusters).where(whereClause),
+    ]);
 
     const clusters: ClusterRow[] = rows.map((row) => ({
       id: row.id,
@@ -72,7 +75,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const response: ClustersResponse = {
       clusters,
-      total: clusters.length,
+      total: countRow.total,
     };
 
     return NextResponse.json(response, { status: 200 });

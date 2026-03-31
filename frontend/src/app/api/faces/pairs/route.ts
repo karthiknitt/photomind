@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/client";
 import { faceClusterPairs, faceClusters } from "@/lib/db/schema";
@@ -69,22 +69,36 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: "Cluster B not found" }, { status: 404 });
     }
 
-    // Normalise order: smaller UUID in clusterIdA
+    // Normalise order: smaller UUID in clusterIdA (prevents duplicate pairs)
     const [normA, normB] = [clusterIdA, clusterIdB].sort();
-    const id = crypto.randomUUID();
     const now = Math.floor(Date.now() / 1000);
 
-    await db.insert(faceClusterPairs).values({
-      id,
-      clusterIdA: normA,
-      clusterIdB: normB,
-      isSame,
-      createdAt: now,
-    });
+    // Upsert: update isSame if pair already exists (user may change their mind)
+    const [existing] = await db
+      .select({ id: faceClusterPairs.id })
+      .from(faceClusterPairs)
+      .where(and(eq(faceClusterPairs.clusterIdA, normA), eq(faceClusterPairs.clusterIdB, normB)));
+
+    const pairId = existing?.id ?? crypto.randomUUID();
+
+    if (existing) {
+      await db
+        .update(faceClusterPairs)
+        .set({ isSame, createdAt: now })
+        .where(eq(faceClusterPairs.id, existing.id));
+    } else {
+      await db.insert(faceClusterPairs).values({
+        id: pairId,
+        clusterIdA: normA,
+        clusterIdB: normB,
+        isSame,
+        createdAt: now,
+      });
+    }
 
     const response: PairsResponse = {
       pair: {
-        id,
+        id: pairId,
         clusterIdA: normA,
         clusterIdB: normB,
         isSame,

@@ -268,11 +268,12 @@ export default function IdentifyPage() {
     setSuggestingAction(true);
     try {
       const candidate = phase.suggestions[phase.suggestionIndex];
-      await fetch(`/api/faces/clusters/${phase.labeledCluster.id}/merge`, {
+      const res = await fetch(`/api/faces/clusters/${phase.labeledCluster.id}/merge`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sourceClusterId: candidate.id }),
       });
+      if (!res.ok) throw new Error(`Merge failed: ${res.status}`);
       await advanceSuggestion(phase, knownPeople);
     } finally {
       setSuggestingAction(false);
@@ -284,7 +285,7 @@ export default function IdentifyPage() {
     setSuggestingAction(true);
     try {
       const candidate = phase.suggestions[phase.suggestionIndex];
-      await fetch("/api/faces/pairs", {
+      const res = await fetch("/api/faces/pairs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -293,6 +294,7 @@ export default function IdentifyPage() {
           isSame: false,
         }),
       });
+      if (!res.ok) throw new Error(`Pair record failed: ${res.status}`);
       await advanceSuggestion(phase, knownPeople);
     } finally {
       setSuggestingAction(false);

@@ -1,4 +1,4 @@
-import { countDistinct, eq } from "drizzle-orm";
+import { and, countDistinct, eq } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/client";
 import { faceClusterPairs, faceClusters, faces } from "@/lib/db/schema";
@@ -85,14 +85,28 @@ export async function POST(
     await db.delete(faceClusters).where(eq(faceClusters.id, sourceClusterId));
 
     // 5. Record positive pair (normalised order: smaller UUID first)
+    // Upsert in case a negative pair was previously recorded for this pair
     const [normA, normB] = [targetId, sourceClusterId].sort();
-    await db.insert(faceClusterPairs).values({
-      id: crypto.randomUUID(),
-      clusterIdA: normA,
-      clusterIdB: normB,
-      isSame: true,
-      createdAt: Math.floor(Date.now() / 1000),
-    });
+    const now = Math.floor(Date.now() / 1000);
+    const [existingPair] = await db
+      .select({ id: faceClusterPairs.id })
+      .from(faceClusterPairs)
+      .where(and(eq(faceClusterPairs.clusterIdA, normA), eq(faceClusterPairs.clusterIdB, normB)));
+
+    if (existingPair) {
+      await db
+        .update(faceClusterPairs)
+        .set({ isSame: true, createdAt: now })
+        .where(eq(faceClusterPairs.id, existingPair.id));
+    } else {
+      await db.insert(faceClusterPairs).values({
+        id: crypto.randomUUID(),
+        clusterIdA: normA,
+        clusterIdB: normB,
+        isSame: true,
+        createdAt: now,
+      });
+    }
 
     // 6. Return updated target cluster
     const [updated] = await db.select().from(faceClusters).where(eq(faceClusters.id, targetId));
