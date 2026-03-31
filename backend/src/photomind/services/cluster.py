@@ -113,7 +113,8 @@ def run_clustering(
 
     fetch = collection.get(include=["embeddings"])
     face_ids: list[str] = fetch["ids"]
-    embeddings: list[list[float]] = fetch["embeddings"] or []
+    raw = fetch["embeddings"]
+    embeddings: list[list[float]] = raw if raw is not None else []
 
     n_faces = len(face_ids)
     logger.info("cluster: fetched %d face embeddings from ChromaDB", n_faces)
