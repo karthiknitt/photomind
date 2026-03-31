@@ -132,10 +132,18 @@ def run_clustering(
     from sklearn.cluster import HDBSCAN
 
     X = np.array(embeddings, dtype=np.float32)
+    # L2-normalise so euclidean distance == cosine distance.
+    # InsightFace (ArcFace) embeddings are designed for cosine similarity;
+    # raw euclidean distance on unnormalised vectors conflates magnitude
+    # with identity and causes multi-person clusters.
+    norms = np.linalg.norm(X, axis=1, keepdims=True)
+    norms = np.where(norms == 0, 1.0, norms)  # avoid divide-by-zero
+    X = X / norms
     hdbscan = HDBSCAN(
         min_cluster_size=min_cluster_size,
         min_samples=min_samples,
         metric="euclidean",
+        cluster_selection_epsilon=0.4,  # cosine dist ~0.2 ≈ same person threshold
     )
     labels: np.ndarray = hdbscan.fit_predict(X)
 
