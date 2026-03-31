@@ -85,7 +85,12 @@ def run_scan(config: PhotoMindConfig) -> None:
             # ------------------------------------------------------------------
             # Local filesystem source — use os.walk-based scanner
             # ------------------------------------------------------------------
-            assert source.local_path is not None
+            if source.local_path is None:
+                logger.error(
+                    "Local source %r is missing 'local_path' — skipping",
+                    source.label,
+                )
+                continue
             source_key = f"local:{source.local_path}"
             logger.info(
                 "Scanning local source %r at %s",

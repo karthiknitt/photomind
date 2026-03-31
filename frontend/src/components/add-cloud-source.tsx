@@ -479,6 +479,7 @@ export function AddCloudSource({ open, onOpenChange, onSuccess }: AddCloudSource
     const tempName = `__photomind_test_${Date.now()}`;
     setTesting(true);
     setTestResult(null);
+    let configCreated = false;
 
     try {
       // Create temp rclone config via POST /api/sources, then test it
@@ -514,6 +515,8 @@ export function AddCloudSource({ open, onOpenChange, onSuccess }: AddCloudSource
         return;
       }
 
+      configCreated = true;
+
       const testRes = await fetch("/api/sources/test", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -521,16 +524,17 @@ export function AddCloudSource({ open, onOpenChange, onSuccess }: AddCloudSource
       });
       const testData = (await testRes.json()) as { ok: boolean; error?: string };
       setTestResult(testData);
-
-      // Cleanup temp config
-      await fetch("/api/sources", {
-        method: "DELETE",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: tempName }),
-      });
     } catch {
       setTestResult({ ok: false, error: "Network error during connection test" });
     } finally {
+      // Always clean up the temp config if it was created, regardless of test outcome
+      if (configCreated) {
+        void fetch("/api/sources", {
+          method: "DELETE",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ name: tempName }),
+        });
+      }
       setTesting(false);
     }
   }
@@ -637,10 +641,15 @@ export function AddCloudSource({ open, onOpenChange, onSuccess }: AddCloudSource
       return (
         r2Params.access_key_id.trim() !== "" &&
         r2Params.secret_access_key.trim() !== "" &&
-        r2Params.account_id.trim() !== ""
+        r2Params.account_id.trim() !== "" &&
+        r2Params.bucket.trim() !== ""
       );
     }
-    return s3Params.access_key_id.trim() !== "" && s3Params.secret_access_key.trim() !== "";
+    return (
+      s3Params.access_key_id.trim() !== "" &&
+      s3Params.secret_access_key.trim() !== "" &&
+      s3Params.region.trim() !== ""
+    );
   }
 
   function canSave() {

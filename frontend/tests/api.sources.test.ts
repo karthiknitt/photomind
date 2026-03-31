@@ -35,25 +35,54 @@ interface SpawnSyncResult {
   error?: Error;
 }
 
+interface FakeChildProcess {
+  stdout: { on: (event: string, cb: (data: Buffer) => void) => void };
+  stderr: { on: (event: string, cb: (data: Buffer) => void) => void };
+  on: (event: string, cb: (...args: unknown[]) => void) => void;
+  kill: () => void;
+}
+
 // When null, the mock falls through to the real fs function.
 const _fsCell: {
   existsSync: ((p: string) => boolean) | null;
   readFileSync: ((p: string, enc: BufferEncoding) => string) | null;
   writeFileSync: ((p: string, data: string) => void) | null;
+  appendFileSync: ((p: string, data: string) => void) | null;
+  mkdirSync: ((p: string, opts?: { recursive?: boolean }) => void) | null;
 } = {
   existsSync: null,
   readFileSync: null,
   writeFileSync: null,
+  appendFileSync: null,
+  mkdirSync: null,
 };
 
 const _cpCell: {
   spawnSync: (cmd: string, args: string[], opts?: object) => SpawnSyncResult;
+  spawn: (cmd: string, args: string[]) => FakeChildProcess;
 } = {
   spawnSync: () => ({
     status: 0,
     stdout: Buffer.from(""),
     stderr: Buffer.from(""),
   }),
+  spawn: (_cmd, _args) => {
+    const cbMap: Record<string, ((...a: unknown[]) => void)[]> = {};
+    setTimeout(() => {
+      cbMap.close?.forEach((cb) => {
+        cb(0);
+      });
+    }, 5);
+    return {
+      stdout: { on: () => {} },
+      stderr: { on: () => {} },
+      on: (event, cb) => {
+        if (!cbMap[event]) cbMap[event] = [];
+        cbMap[event].push(cb);
+      },
+      kill: () => {},
+    };
+  },
 };
 
 // Mock node:fs — expose full union of exports used across all test files to avoid
@@ -70,10 +99,20 @@ mock.module("node:fs", () => {
         : (_realFs.readFileSync(p, enc) as string),
     writeFileSync: (p: string, data: string) =>
       _fsCell.writeFileSync ? _fsCell.writeFileSync(p, data) : _realFs.writeFileSync(p, data),
+    appendFileSync: (p: string, data: string) =>
+      _fsCell.appendFileSync ? _fsCell.appendFileSync(p, data) : _realFs.appendFileSync(p, data),
+    mkdirSync: (p: string, opts?: { recursive?: boolean }) =>
+      _fsCell.mkdirSync
+        ? _fsCell.mkdirSync(p, opts)
+        : // biome-ignore lint/suspicious/noExplicitAny: pass-through
+          (_realFs.mkdirSync as any)(p, opts),
     // Stubs for exports used by filesystem/route.ts and import/route.ts
     readdirSync: (...args: Parameters<typeof _realFs.readdirSync>) =>
       // biome-ignore lint/suspicious/noExplicitAny: pass-through
       (_realFs.readdirSync as any)(...args),
+    realpathSync: (...args: Parameters<typeof _realFs.realpathSync>) =>
+      // biome-ignore lint/suspicious/noExplicitAny: pass-through
+      (_realFs.realpathSync as any)(...args),
     statSync: (...args: Parameters<typeof _realFs.statSync>) =>
       // biome-ignore lint/suspicious/noExplicitAny: pass-through
       (_realFs.statSync as any)(...args),
@@ -84,8 +123,7 @@ mock.module("node:fs", () => {
 // Mock node:child_process — expose full union of exports (spawnSync + spawn)
 mock.module("node:child_process", () => ({
   spawnSync: (cmd: string, args: string[], opts?: object) => _cpCell.spawnSync(cmd, args, opts),
-  // Stub for spawn used by import/route.ts
-  spawn: () => ({ unref: () => {} }),
+  spawn: (cmd: string, args: string[]) => _cpCell.spawn(cmd, args),
 }));
 
 // ─── Global reset ─────────────────────────────────────────────────────────────
@@ -96,11 +134,30 @@ beforeEach(() => {
   _fsCell.existsSync = null;
   _fsCell.readFileSync = null;
   _fsCell.writeFileSync = null;
+  _fsCell.appendFileSync = null;
+  _fsCell.mkdirSync = null;
   _cpCell.spawnSync = () => ({
     status: 0,
     stdout: Buffer.from(""),
     stderr: Buffer.from(""),
   });
+  _cpCell.spawn = (_cmd, _args) => {
+    const cbMap: Record<string, ((...a: unknown[]) => void)[]> = {};
+    setTimeout(() => {
+      cbMap.close?.forEach((cb) => {
+        cb(0);
+      });
+    }, 5);
+    return {
+      stdout: { on: () => {} },
+      stderr: { on: () => {} },
+      on: (event, cb) => {
+        if (!cbMap[event]) cbMap[event] = [];
+        cbMap[event].push(cb);
+      },
+      kill: () => {},
+    };
+  };
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -399,20 +456,36 @@ describe("POST /api/sources — apikey provider", () => {
 
 // ─── POST /api/sources (oauth) ────────────────────────────────────────────────
 
+// OAuth POST now writes the rclone config directly via appendFileSync (INI section)
+// instead of passing the token as a cmdline arg to `rclone config create`.
+// spawnSync is still used for `config file` (get path) and `config delete` (cleanup).
+
 describe("POST /api/sources — oauth provider", () => {
-  let capturedSpawnArgs: string[][] = [];
+  const RCLONE_CONF_PATH = "/home/test/.config/rclone/rclone.conf";
+  let appendedContent = "";
   let writtenYaml = "";
 
   beforeEach(() => {
-    capturedSpawnArgs = [];
+    appendedContent = "";
     writtenYaml = "";
     _fsCell.existsSync = () => true;
     _fsCell.readFileSync = () => EMPTY_CONFIG_YAML;
     _fsCell.writeFileSync = (_p: string, data: string) => {
       writtenYaml = data;
     };
+    _fsCell.appendFileSync = (_p: string, data: string) => {
+      appendedContent += data;
+    };
+    _fsCell.mkdirSync = () => {};
+    // spawnSync: return config file path on `config file`, success on everything else
     _cpCell.spawnSync = (_cmd: string, args: string[]) => {
-      capturedSpawnArgs.push(args);
+      if (args[0] === "config" && args[1] === "file") {
+        return {
+          status: 0,
+          stdout: Buffer.from(`${RCLONE_CONF_PATH}\n`),
+          stderr: Buffer.from(""),
+        };
+      }
       return { status: 0, stdout: Buffer.from(""), stderr: Buffer.from("") };
     };
   });
@@ -429,7 +502,7 @@ describe("POST /api/sources — oauth provider", () => {
     expect(res.status).toBe(201);
   });
 
-  it("calls rclone config create with type=drive for drive provider", async () => {
+  it("writes rclone config section with type=drive for drive provider", async () => {
     await callPost({
       type: "oauth",
       provider: "drive",
@@ -438,11 +511,11 @@ describe("POST /api/sources — oauth provider", () => {
       label: "My Drive",
       token: '{"access_token":"tok123"}',
     });
-    const configCreateArgs = capturedSpawnArgs[0];
-    expect(configCreateArgs[3]).toBe("drive");
+    expect(appendedContent).toContain("[my_drive]");
+    expect(appendedContent).toContain("type = drive");
   });
 
-  it("calls rclone config create with type=dropbox for dropbox", async () => {
+  it("writes rclone config section with type=dropbox for dropbox provider", async () => {
     await callPost({
       type: "oauth",
       provider: "dropbox",
@@ -451,11 +524,11 @@ describe("POST /api/sources — oauth provider", () => {
       label: "Dropbox",
       token: '{"access_token":"dbtok"}',
     });
-    const configCreateArgs = capturedSpawnArgs[0];
-    expect(configCreateArgs[3]).toBe("dropbox");
+    expect(appendedContent).toContain("[my_dropbox]");
+    expect(appendedContent).toContain("type = dropbox");
   });
 
-  it("calls rclone config create with type=onedrive for onedrive", async () => {
+  it("writes rclone config section with type=onedrive for onedrive provider", async () => {
     await callPost({
       type: "oauth",
       provider: "onedrive",
@@ -464,11 +537,11 @@ describe("POST /api/sources — oauth provider", () => {
       label: "OneDrive",
       token: '{"access_token":"odtok"}',
     });
-    const configCreateArgs = capturedSpawnArgs[0];
-    expect(configCreateArgs[3]).toBe("onedrive");
+    expect(appendedContent).toContain("[my_od]");
+    expect(appendedContent).toContain("type = onedrive");
   });
 
-  it("passes token in rclone config create args", async () => {
+  it("writes token value to rclone config file (not cmdline args)", async () => {
     const token = '{"access_token":"tok999"}';
     await callPost({
       type: "oauth",
@@ -478,10 +551,8 @@ describe("POST /api/sources — oauth provider", () => {
       label: "Drive",
       token,
     });
-    const configCreateArgs = capturedSpawnArgs[0];
-    // token should appear as a key=value pair
-    const allArgs = configCreateArgs.join(" ");
-    expect(allArgs).toContain("token");
+    // Token written to config file, not exposed as a cmdline argument
+    expect(appendedContent).toContain(`token = ${token}`);
   });
 
   it("appends source to config.yaml", async () => {
@@ -616,15 +687,54 @@ describe("POST /api/sources/test", () => {
 
 // ─── GET /api/sources/oauth-auth ─────────────────────────────────────────────
 
+// The oauth-auth route uses async spawn (not spawnSync) because rclone authorize
+// doesn't exit after printing the URL — it waits for the full OAuth flow.
+// Tests use a fake child process that emits events via setTimeout.
+
 describe("GET /api/sources/oauth-auth", () => {
-  it("returns {url} from rclone authorize output", async () => {
-    _cpCell.spawnSync = () => ({
-      status: 0,
-      stdout: Buffer.from(
-        "Please go to the following link: https://accounts.google.com/oauth?code=abc\nLog in\n"
-      ),
-      stderr: Buffer.from(""),
-    });
+  function makeSpawnWithOutput(
+    stdoutData: string,
+    stderrData: string,
+    emitClose = false
+  ): typeof _cpCell.spawn {
+    return (_cmd, _args) => {
+      const cbMap: Record<string, ((...a: unknown[]) => void)[]> = {};
+      const stdoutCbs: ((d: Buffer) => void)[] = [];
+      const stderrCbs: ((d: Buffer) => void)[] = [];
+      setTimeout(() => {
+        if (stdoutData) {
+          stdoutCbs.forEach((cb) => {
+            cb(Buffer.from(stdoutData));
+          });
+        }
+        if (stderrData) {
+          stderrCbs.forEach((cb) => {
+            cb(Buffer.from(stderrData));
+          });
+        }
+        if (emitClose) {
+          cbMap.close?.forEach((cb) => {
+            cb(0);
+          });
+        }
+      }, 5);
+      return {
+        stdout: { on: (_e: string, cb: (d: Buffer) => void) => stdoutCbs.push(cb) },
+        stderr: { on: (_e: string, cb: (d: Buffer) => void) => stderrCbs.push(cb) },
+        on: (event, cb) => {
+          if (!cbMap[event]) cbMap[event] = [];
+          cbMap[event].push(cb);
+        },
+        kill: () => {},
+      };
+    };
+  }
+
+  it("returns {url} from rclone authorize stdout output", async () => {
+    _cpCell.spawn = makeSpawnWithOutput(
+      "Please go to the following link: https://accounts.google.com/oauth?code=abc\nLog in\n",
+      ""
+    );
 
     const res = await callOauthAuth("drive");
     expect(res.status).toBe(200);
@@ -634,13 +744,10 @@ describe("GET /api/sources/oauth-auth", () => {
   });
 
   it("extracts URL from rclone authorize stderr output", async () => {
-    _cpCell.spawnSync = () => ({
-      status: 0,
-      stdout: Buffer.from(""),
-      stderr: Buffer.from(
-        "Please go to the following link: https://www.dropbox.com/oauth2/authorize?client_id=xyz\n"
-      ),
-    });
+    _cpCell.spawn = makeSpawnWithOutput(
+      "",
+      "Please go to the following link: https://www.dropbox.com/oauth2/authorize?client_id=xyz\n"
+    );
 
     const res = await callOauthAuth("dropbox");
     const data = await res.json();
@@ -661,12 +768,8 @@ describe("GET /api/sources/oauth-auth", () => {
     expect(res.status).toBe(400);
   });
 
-  it("returns 500 when no URL found in rclone output", async () => {
-    _cpCell.spawnSync = () => ({
-      status: 0,
-      stdout: Buffer.from("Waiting for code...\n"),
-      stderr: Buffer.from(""),
-    });
+  it("returns 500 when rclone closes without emitting a URL", async () => {
+    _cpCell.spawn = makeSpawnWithOutput("Waiting for code...\n", "", true);
 
     const res = await callOauthAuth("drive");
     expect(res.status).toBe(500);

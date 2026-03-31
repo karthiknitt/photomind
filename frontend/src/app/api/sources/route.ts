@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { type NextRequest, NextResponse } from "next/server";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
@@ -96,6 +96,32 @@ function rcloneTypeToProvider(rcloneType: string): string {
   }
 }
 
+/**
+ * Write an OAuth remote directly to the rclone config file to avoid exposing
+ * the token as a command-line argument visible in process listings.
+ */
+function writeOAuthRemoteConfig(name: string, rcloneType: string, token: string): void {
+  const fileResult = spawnSync(RCLONE, ["config", "file"], { encoding: "buffer" });
+  const lines = fileResult.stdout
+    .toString("utf-8")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const configPath = lines[lines.length - 1];
+  if (!configPath || !path.isAbsolute(configPath)) {
+    throw new Error("Cannot determine rclone config file path");
+  }
+
+  // Ensure directory exists (first-run scenario)
+  mkdirSync(path.dirname(configPath), { recursive: true });
+
+  // Remove any stale section, then append the new one
+  spawnSync(RCLONE, ["config", "delete", name], { encoding: "buffer" });
+
+  const section = [`\n[${name}]`, `type = ${rcloneType}`, `token = ${token}`, ""].join("\n");
+  appendFileSync(configPath, section);
+}
+
 function providerToRcloneType(provider: string): string {
   switch (provider) {
     case "drive":
@@ -179,19 +205,28 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         configCreateArgs.push(`${k}=${v}`);
       }
     }
+
+    const result = spawnSync(RCLONE, configCreateArgs, { encoding: "buffer" });
+    if (result.status !== 0) {
+      const stderr = result.stderr.toString("utf-8");
+      console.error("[POST /api/sources] rclone config create failed:", stderr);
+      return NextResponse.json(
+        { error: `rclone config create failed: ${stderr}` },
+        { status: 500 }
+      );
+    }
   } else if (body.type === "oauth") {
+    // Write token directly to rclone config file — avoids exposing the token
+    // as a command-line argument (visible in ps / /proc/*/cmdline)
     const oauthBody = body as OauthPostBody;
-    configCreateArgs.push(`token=${oauthBody.token}`);
+    try {
+      writeOAuthRemoteConfig(name, rcloneType, oauthBody.token);
+    } catch (err) {
+      console.error("[POST /api/sources] Failed to write rclone OAuth config:", err);
+      return NextResponse.json({ error: "Failed to create rclone remote" }, { status: 500 });
+    }
   } else {
     return NextResponse.json({ error: "Unknown type" }, { status: 400 });
-  }
-
-  const result = spawnSync(RCLONE, configCreateArgs, { encoding: "buffer" });
-
-  if (result.status !== 0) {
-    const stderr = result.stderr.toString("utf-8");
-    console.error("[POST /api/sources] rclone config create failed:", stderr);
-    return NextResponse.json({ error: `rclone config create failed: ${stderr}` }, { status: 500 });
   }
 
   // Append source to config.yaml
@@ -229,8 +264,14 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // Remove from rclone config
-  spawnSync(RCLONE, ["config", "delete", name], { encoding: "buffer" });
+  // Remove from rclone config (log failure but continue — remote may already be gone)
+  const deleteResult = spawnSync(RCLONE, ["config", "delete", name], { encoding: "buffer" });
+  if (deleteResult.status !== 0) {
+    console.warn(
+      `[DELETE /api/sources] rclone config delete failed for ${name}:`,
+      deleteResult.stderr.toString("utf-8")
+    );
+  }
 
   // Remove from config.yaml
   sources.splice(idx, 1);

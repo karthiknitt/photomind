@@ -37,9 +37,11 @@ interface DirentLike {
 const _fsCell: {
   existsSync: ((p: string) => boolean) | null;
   readdirSync: ((p: string, opts: { withFileTypes: true }) => DirentLike[]) | null;
+  realpathSync: ((p: string) => string) | null;
 } = {
   existsSync: null,
   readdirSync: null,
+  realpathSync: null,
 };
 
 // Mock node:fs — expose full union of exports used across all test files to avoid
@@ -54,6 +56,8 @@ mock.module("node:fs", () => {
         ? _fsCell.readdirSync(p, opts)
         : // biome-ignore lint/suspicious/noExplicitAny: pass-through
           (_realFs.readdirSync as any)(p, opts),
+    realpathSync: (p: string) =>
+      _fsCell.realpathSync ? _fsCell.realpathSync(p) : _realFs.realpathSync(p),
     // Pass-through stubs for exports used by other routes
     readFileSync: (...args: Parameters<typeof _realFs.readFileSync>) =>
       // biome-ignore lint/suspicious/noExplicitAny: pass-through
@@ -61,6 +65,12 @@ mock.module("node:fs", () => {
     writeFileSync: (...args: Parameters<typeof _realFs.writeFileSync>) =>
       // biome-ignore lint/suspicious/noExplicitAny: pass-through
       (_realFs.writeFileSync as any)(...args),
+    appendFileSync: (...args: Parameters<typeof _realFs.appendFileSync>) =>
+      // biome-ignore lint/suspicious/noExplicitAny: pass-through
+      (_realFs.appendFileSync as any)(...args),
+    mkdirSync: (...args: Parameters<typeof _realFs.mkdirSync>) =>
+      // biome-ignore lint/suspicious/noExplicitAny: pass-through
+      (_realFs.mkdirSync as any)(...args),
     statSync: (...args: Parameters<typeof _realFs.statSync>) =>
       // biome-ignore lint/suspicious/noExplicitAny: pass-through
       (_realFs.statSync as any)(...args),
@@ -80,6 +90,7 @@ mock.module("node:child_process", () => ({
 beforeEach(() => {
   _fsCell.existsSync = null;
   _fsCell.readdirSync = null;
+  _fsCell.realpathSync = null;
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -186,6 +197,10 @@ describe("GET /api/filesystem — path=/", () => {
 describe("GET /api/filesystem — valid paths", () => {
   beforeEach(() => {
     _fsCell.existsSync = () => true;
+    // Identity mock: path.resolve + realpathSync returns the path as-is in tests.
+    // Without this, realpathSync would call the real syscall which would fail for
+    // synthetic paths like /media/usb that don't exist on the test host.
+    _fsCell.realpathSync = (p: string) => p;
   });
 
   it("returns subdirectories under /media", async () => {
@@ -309,14 +324,17 @@ describe("GET /api/filesystem — 403 for unsafe paths", () => {
 
 describe("GET /api/filesystem — 404 for non-existent path", () => {
   it("returns 404 when path does not exist", async () => {
-    _fsCell.existsSync = () => false;
+    // The route calls realpathSync — if path doesn't exist it throws, returning 404
+    _fsCell.realpathSync = () => {
+      throw Object.assign(new Error("ENOENT: no such file or directory"), { code: "ENOENT" });
+    };
 
     const res = await callGet("path=/media/nonexistent");
     expect(res.status).toBe(404);
   });
 
   it("returns 404 when readdirSync throws ENOENT", async () => {
-    _fsCell.existsSync = () => true;
+    _fsCell.realpathSync = (p: string) => p;
     _fsCell.readdirSync = () => {
       throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
     };
@@ -326,7 +344,7 @@ describe("GET /api/filesystem — 404 for non-existent path", () => {
   });
 
   it("returns 404 when readdirSync throws EACCES (permission denied)", async () => {
-    _fsCell.existsSync = () => true;
+    _fsCell.realpathSync = (p: string) => p;
     _fsCell.readdirSync = () => {
       throw Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
     };
@@ -341,6 +359,7 @@ describe("GET /api/filesystem — 404 for non-existent path", () => {
 describe("GET /api/filesystem — filtering", () => {
   beforeEach(() => {
     _fsCell.existsSync = () => true;
+    _fsCell.realpathSync = (p: string) => p;
   });
 
   it("excludes hidden directories (starting with .)", async () => {

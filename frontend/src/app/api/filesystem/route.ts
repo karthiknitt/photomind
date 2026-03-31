@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -64,8 +64,14 @@ export function GET(req: NextRequest): NextResponse {
     return NextResponse.json(body);
   }
 
-  // Resolve the path to prevent traversal attacks
-  const resolvedPath = path.resolve(rawPath);
+  // Resolve path and follow symlinks — realpathSync prevents symlink-based
+  // safe-root escapes that path.resolve() alone cannot catch
+  let resolvedPath: string;
+  try {
+    resolvedPath = realpathSync(path.resolve(rawPath));
+  } catch {
+    return NextResponse.json({ error: "Path not found" }, { status: 404 });
+  }
 
   // Security check — must be under a safe root
   if (!isPathAllowed(resolvedPath)) {
@@ -73,11 +79,6 @@ export function GET(req: NextRequest): NextResponse {
       { error: "Access denied: path is outside allowed directories" },
       { status: 403 }
     );
-  }
-
-  // Check existence
-  if (!existsSync(resolvedPath)) {
-    return NextResponse.json({ error: "Path not found" }, { status: 404 });
   }
 
   // Read directory entries

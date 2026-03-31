@@ -120,7 +120,9 @@ export const sources = sqliteTable("sources", {
 
 export const importJobs = sqliteTable("import_jobs", {
   id: text("id").primaryKey(),
-  status: text("status").notNull().default("RUNNING"), // RUNNING | DONE | ERROR
+  status: text("status", { enum: ["RUNNING", "DONE", "ERROR"] })
+    .notNull()
+    .default("RUNNING"),
   localPath: text("local_path").notNull(),
   label: text("label"),
   totalCount: integer("total_count"),

@@ -128,9 +128,18 @@ mock.module("node:fs", () => {
     writeFileSync: (...args: Parameters<typeof _realFs.writeFileSync>) =>
       // biome-ignore lint/suspicious/noExplicitAny: pass-through
       (_realFs.writeFileSync as any)(...args),
+    appendFileSync: (...args: Parameters<typeof _realFs.appendFileSync>) =>
+      // biome-ignore lint/suspicious/noExplicitAny: pass-through
+      (_realFs.appendFileSync as any)(...args),
+    mkdirSync: (...args: Parameters<typeof _realFs.mkdirSync>) =>
+      // biome-ignore lint/suspicious/noExplicitAny: pass-through
+      (_realFs.mkdirSync as any)(...args),
     readdirSync: (...args: Parameters<typeof _realFs.readdirSync>) =>
       // biome-ignore lint/suspicious/noExplicitAny: pass-through
       (_realFs.readdirSync as any)(...args),
+    realpathSync: (...args: Parameters<typeof _realFs.realpathSync>) =>
+      // biome-ignore lint/suspicious/noExplicitAny: pass-through
+      (_realFs.realpathSync as any)(...args),
   };
   return { ...mod, default: mod };
 });

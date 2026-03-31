@@ -29,6 +29,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const result = spawnSync("rclone", ["lsd", `${name}:`], {
     encoding: "buffer",
+    timeout: 15_000,
+    maxBuffer: 1024 * 1024,
   });
 
   if (result.error) {

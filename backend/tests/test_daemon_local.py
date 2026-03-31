@@ -123,7 +123,9 @@ class TestLocalSourceDispatch:
         local_files = [_local_file("/mnt/test/img.jpg", "img.jpg")]
 
         with (
-            patch(f"{LOCAL_SCANNER_PATCH}.list_local_files", return_value=local_files) as mock_list,
+            patch(
+                f"{LOCAL_SCANNER_PATCH}.list_local_files", return_value=local_files
+            ) as mock_list,
             patch(PIPELINE_PATCH, return_value="uuid-1"),
             patch(f"{CLIP_PATCH}.get_chroma_collection", return_value=chroma_mock),
         ):
@@ -152,7 +154,7 @@ class TestLocalSourceDispatch:
         local_config: PhotoMindConfig,
         chroma_mock: MagicMock,
     ) -> None:
-        """process_photo must receive source_remote='local:/mnt/test' for local source."""
+        """process_photo receives source_remote='local:/mnt/test' for local source."""
         local_files = [_local_file("/mnt/test/img.jpg", "img.jpg")]
 
         with (

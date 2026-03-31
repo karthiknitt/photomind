@@ -9,7 +9,6 @@ import pytest
 
 from photomind.config import PhotoMindConfig, SourceConfig, load_config
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import re
 import subprocess
+import threading
 from typing import Literal
 
 logger = logging.getLogger(__name__)
@@ -20,9 +21,24 @@ OAuthProvider = Literal["drive", "dropbox", "onedrive"]
 # Regex to extract an http(s) URL from a line of text
 _URL_RE = re.compile(r"https?://\S+")
 
+# rclone remote names: start with alphanumeric, then alphanumeric/underscore/hyphen
+_REMOTE_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
+
+# Timeout for waiting for the OAuth authorization URL from rclone
+_OAUTH_URL_TIMEOUT = 30  # seconds
+
 
 class RcloneManagerError(Exception):
     """Raised when a rclone config management command fails."""
+
+
+def _validate_remote_name(name: str) -> None:
+    """Raise RcloneManagerError if name is not a valid rclone remote name."""
+    if not _REMOTE_NAME_RE.match(name):
+        raise RcloneManagerError(
+            f"Invalid remote name {name!r}: must start with alphanumeric and "
+            "contain only alphanumeric, underscore, or hyphen characters"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -40,6 +56,7 @@ def create_remote(name: str, remote_type: str, params: dict[str, str]) -> None:
         params: Key-value pairs for backend config (e.g.
             ``{"provider": "Cloudflare", "access_key_id": "K"}``).
     """
+    _validate_remote_name(name)
     cmd = ["rclone", "config", "create", name, remote_type]
     cmd.extend(f"{k}={v}" for k, v in params.items())
 
@@ -54,6 +71,7 @@ def create_remote(name: str, remote_type: str, params: dict[str, str]) -> None:
 
 def delete_remote(name: str) -> None:
     """Delete a rclone remote via ``rclone config delete <name>``."""
+    _validate_remote_name(name)
     cmd = ["rclone", "config", "delete", name]
     logger.debug("Deleting rclone remote %r", name)
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -95,6 +113,7 @@ def test_remote(name: str) -> bool:
     Returns:
         ``True`` if accessible, ``False`` otherwise.  Does **not** raise.
     """
+    _validate_remote_name(name)
     result = subprocess.run(
         ["rclone", "lsd", f"{name}:"], capture_output=True, text=True
     )
@@ -140,23 +159,31 @@ def get_oauth_auth_url(provider: OAuthProvider) -> str:
         text=True,
     )
 
-    url: str | None = None
-    try:
+    found: list[str] = []  # mutable cell shared with reader thread
+
+    def _scan() -> None:
         assert proc.stderr is not None  # guaranteed by stderr=PIPE
         for line in proc.stderr:
             match = _URL_RE.search(line)
             if match:
-                url = match.group(0).rstrip(")")  # strip any trailing paren
-                logger.debug("Extracted OAuth URL: %s", url)
-                break
-    finally:
-        proc.terminate()
-        proc.wait()
+                found.append(match.group(0).rstrip(")"))
+                logger.debug("Extracted OAuth URL: %s", found[0])
+                return
 
-    if url is None:
+    reader = threading.Thread(target=_scan, daemon=True)
+    reader.start()
+    reader.join(timeout=_OAUTH_URL_TIMEOUT)
+
+    proc.terminate()
+    proc.wait()
+
+    if not found:
         raise RcloneManagerError(
-            f"No OAuth URL found in rclone authorize output for provider {provider!r}"
+            f"No OAuth URL found within {_OAUTH_URL_TIMEOUT}s "
+            f"for provider {provider!r}"
         )
+
+    url = found[0]
 
     return url
 
