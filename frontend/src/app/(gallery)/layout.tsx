@@ -1,3 +1,4 @@
+import { FolderUp } from "lucide-react";
 import Link from "next/link";
 import { ThemeToggle } from "@/components/theme-toggle";
 
@@ -37,6 +38,13 @@ export default function GalleryLayout({ children }: { children: React.ReactNode 
               className="transition-colors hover:text-zinc-900 dark:hover:text-zinc-50"
             >
               Dashboard
+            </Link>
+            <Link
+              href="/import"
+              className="flex items-center gap-1 transition-colors hover:text-zinc-900 dark:hover:text-zinc-50"
+            >
+              <FolderUp className="h-3.5 w-3.5" />
+              Import
             </Link>
             <Link
               href="/logs"

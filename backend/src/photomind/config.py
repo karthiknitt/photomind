@@ -10,13 +10,18 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 
 @dataclass
 class SourceConfig:
-    remote: str
-    scan_path: str
-    label: str
+    source_type: Literal["cloud", "local"] = "cloud"
+    # cloud fields (required when source_type == "cloud")
+    remote: str | None = None
+    scan_path: str | None = None
+    # local fields (required when source_type == "local")
+    local_path: str | None = None
+    label: str = ""
 
 
 @dataclass
@@ -106,14 +111,29 @@ def load_config(config_path: str | None = None) -> PhotoMindConfig:
     with open(path) as f:
         data = yaml.safe_load(f) or {}
 
-    sources = [
-        SourceConfig(
-            remote=s["remote"],
-            scan_path=s["scan_path"],
-            label=s.get("label", s["remote"]),
-        )
-        for s in data.get("sources", [])
-    ]
+    sources: list[SourceConfig] = []
+    for s in data.get("sources", []):
+        if "path" in s:
+            sources.append(
+                SourceConfig(
+                    source_type="local",
+                    local_path=s["path"],
+                    label=s.get("label", s["path"]),
+                )
+            )
+        else:
+            if "remote" not in s or "scan_path" not in s:
+                raise ValueError(
+                    f"Cloud source entry is missing 'remote' or 'scan_path': {s}"
+                )
+            sources.append(
+                SourceConfig(
+                    source_type="cloud",
+                    remote=s["remote"],
+                    scan_path=s["scan_path"],
+                    label=s.get("label", s["remote"]),
+                )
+            )
 
     output_data = data.get("output", {})
     pipeline_data = data.get("pipeline", {})
@@ -121,11 +141,12 @@ def load_config(config_path: str | None = None) -> PhotoMindConfig:
     insightface_data = data.get("insightface", {})
     daemon_data = data.get("daemon", {})
 
+    _defaults = PhotoMindConfig()
     return PhotoMindConfig(
-        database_path=data.get("database_path", PhotoMindConfig().database_path),
-        chroma_db_path=data.get("chroma_db_path", PhotoMindConfig().chroma_db_path),
-        thumbnails_path=data.get("thumbnails_path", PhotoMindConfig().thumbnails_path),
-        tmp_path=data.get("tmp_path", PhotoMindConfig().tmp_path),
+        database_path=data.get("database_path", _defaults.database_path),
+        chroma_db_path=data.get("chroma_db_path", _defaults.chroma_db_path),
+        thumbnails_path=data.get("thumbnails_path", _defaults.thumbnails_path),
+        tmp_path=data.get("tmp_path", _defaults.tmp_path),
         sources=sources,
         output=OutputConfig(
             remote=output_data.get("remote", "onedrive_karthik"),
