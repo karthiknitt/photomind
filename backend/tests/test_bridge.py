@@ -261,3 +261,128 @@ class TestEmbedText:
         clip_mod._model = None
         clip_mod._preprocess = None
         clip_mod._tokenizer = None
+
+
+# ---------------------------------------------------------------------------
+# POST /faces/centroid-similar tests
+# ---------------------------------------------------------------------------
+
+import math
+
+import numpy as np
+
+_FACES_CHROMA = "photomind.bridge.main.get_chroma_collection"
+
+
+def _make_embedding(dim: int = 512, seed: int = 0) -> list[float]:
+    """Return a reproducible unit-normalised embedding vector."""
+    rng = np.random.default_rng(seed)
+    v = rng.standard_normal(dim).astype(np.float32)
+    v = v / np.linalg.norm(v)
+    return v.tolist()
+
+
+class TestCentroidSimilar:
+    def test_returns_results_for_valid_request(self, client: TestClient) -> None:
+        """POST /faces/centroid-similar returns 200 with result list."""
+        emb = _make_embedding(seed=1)
+        mock_collection = MagicMock()
+        mock_collection.get.return_value = {"embeddings": [emb], "ids": ["face-1"]}
+        mock_collection.query.return_value = {
+            "ids": [["face-2", "face-3"]],
+            "distances": [[0.2, 0.4]],
+        }
+
+        with patch(_FACES_CHROMA, return_value=mock_collection):
+            resp = client.post(
+                "/faces/centroid-similar",
+                json={"embedding_ids": ["face-1"]},
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "results" in data
+        assert len(data["results"]) == 2
+        assert data["results"][0]["id"] == "face-2"
+        assert math.isclose(data["results"][0]["distance"], 0.2)
+
+    def test_returns_400_for_empty_embedding_ids(self, client: TestClient) -> None:
+        """POST /faces/centroid-similar with empty embedding_ids returns 400."""
+        resp = client.post("/faces/centroid-similar", json={"embedding_ids": []})
+        assert resp.status_code == 400
+
+    def test_exclude_ids_are_filtered_from_results(self, client: TestClient) -> None:
+        """Results matching exclude_ids are removed from the response."""
+        emb = _make_embedding(seed=2)
+        mock_collection = MagicMock()
+        mock_collection.get.return_value = {"embeddings": [emb], "ids": ["face-1"]}
+        mock_collection.query.return_value = {
+            "ids": [["face-2", "face-3", "face-4"]],
+            "distances": [[0.1, 0.2, 0.3]],
+        }
+
+        with patch(_FACES_CHROMA, return_value=mock_collection):
+            resp = client.post(
+                "/faces/centroid-similar",
+                json={"embedding_ids": ["face-1"], "exclude_ids": ["face-3"]},
+            )
+
+        assert resp.status_code == 200
+        ids = [r["id"] for r in resp.json()["results"]]
+        assert "face-3" not in ids
+        assert "face-2" in ids
+        assert "face-4" in ids
+
+    def test_centroid_is_l2_normalised(self, client: TestClient) -> None:
+        """The query sent to ChromaDB uses an L2-normalised centroid."""
+        emb1 = _make_embedding(seed=3)
+        emb2 = _make_embedding(seed=4)
+        mock_collection = MagicMock()
+        mock_collection.get.return_value = {
+            "embeddings": [emb1, emb2],
+            "ids": ["f1", "f2"],
+        }
+        mock_collection.query.return_value = {"ids": [[]], "distances": [[]]}
+
+        with patch(_FACES_CHROMA, return_value=mock_collection):
+            client.post(
+                "/faces/centroid-similar",
+                json={"embedding_ids": ["f1", "f2"]},
+            )
+
+        mock_collection.query.assert_called_once()
+        call_kwargs = mock_collection.query.call_args[1]
+        centroid = np.array(call_kwargs["query_embeddings"][0])
+        norm = float(np.linalg.norm(centroid))
+        assert math.isclose(norm, 1.0, abs_tol=1e-5), f"centroid norm={norm} (expected 1.0)"
+
+    def test_returns_400_when_collection_has_no_embeddings(
+        self, client: TestClient
+    ) -> None:
+        """When ChromaDB returns no embeddings, response is 400 (cannot compute centroid)."""
+        mock_collection = MagicMock()
+        mock_collection.get.return_value = {"embeddings": None, "ids": []}
+
+        with patch(_FACES_CHROMA, return_value=mock_collection):
+            resp = client.post(
+                "/faces/centroid-similar",
+                json={"embedding_ids": ["nonexistent"]},
+            )
+
+        assert resp.status_code == 400
+
+    def test_n_results_respected(self, client: TestClient) -> None:
+        """n_results parameter is passed to ChromaDB query."""
+        emb = _make_embedding(seed=5)
+        mock_collection = MagicMock()
+        mock_collection.get.return_value = {"embeddings": [emb], "ids": ["f1"]}
+        mock_collection.query.return_value = {"ids": [[]], "distances": [[]]}
+
+        with patch(_FACES_CHROMA, return_value=mock_collection):
+            client.post(
+                "/faces/centroid-similar",
+                json={"embedding_ids": ["f1"], "n_results": 50},
+            )
+
+        call_kwargs = mock_collection.query.call_args[1]
+        assert call_kwargs["n_results"] == 50
