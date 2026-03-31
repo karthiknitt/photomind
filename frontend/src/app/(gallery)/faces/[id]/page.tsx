@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useRef, useState } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -21,6 +22,18 @@ interface PhotoRow {
   country: string | null;
   width: number | null;
   height: number | null;
+}
+
+interface FaceRow {
+  id: string;
+  photoId: string;
+  bboxX: number | null;
+  bboxY: number | null;
+  bboxW: number | null;
+  bboxH: number | null;
+  detScore: number | null;
+  photoWidth: number | null;
+  photoHeight: number | null;
 }
 
 interface Pagination {
@@ -206,12 +219,249 @@ function PhotoCard({ photo }: { photo: PhotoRow }) {
   );
 }
 
+// ─── Face crop tile ───────────────────────────────────────────────────────────
+// Renders a face bbox cropped from its photo thumbnail using CSS translate.
+// Thumbnail is max 400px longest side; we scale bbox coords accordingly.
+
+const CROP_PX = 88; // display size of each face crop tile
+
+interface FaceCropProps {
+  face: FaceRow;
+  selected: boolean;
+  onToggle: () => void;
+}
+
+function FaceCrop({ face, selected, onToggle }: FaceCropProps) {
+  const photoW = face.photoWidth ?? 400;
+  const photoH = face.photoHeight ?? 400;
+  const scale = Math.min(1, Math.min(400 / photoW, 400 / photoH));
+  const thumbW = photoW * scale;
+  const thumbH = photoH * scale;
+  const bx = (face.bboxX ?? 0) * scale;
+  const by = (face.bboxY ?? 0) * scale;
+  const bw = Math.max(1, (face.bboxW ?? 80) * scale);
+  const bh = Math.max(1, (face.bboxH ?? 80) * scale);
+  // zoom so the face fills the crop tile
+  const zoom = CROP_PX / Math.max(bw, bh);
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`relative overflow-hidden rounded-lg border-2 transition-all ${
+        selected
+          ? "border-blue-500 ring-2 ring-blue-400 ring-offset-1"
+          : "border-transparent hover:border-zinc-400"
+      }`}
+      style={{ width: CROP_PX, height: CROP_PX }}
+      title="Click to select"
+    >
+      {/* biome-ignore lint/performance/noImgElement: face crop requires CSS sub-pixel translation not compatible with next/image wrapper */}
+      <img
+        src={`/api/thumbnails/${face.photoId}`}
+        alt=""
+        style={{
+          position: "absolute",
+          width: thumbW * zoom,
+          height: thumbH * zoom,
+          left: -(bx * zoom),
+          top: -(by * zoom),
+          pointerEvents: "none",
+        }}
+      />
+      {selected && (
+        <div className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500">
+          <svg
+            className="h-3 w-3 text-white"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            aria-hidden="true"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+      )}
+    </button>
+  );
+}
+
+// ─── Split panel ──────────────────────────────────────────────────────────────
+
+interface SplitPanelProps {
+  clusterId: string;
+  onCancel: () => void;
+  onSplit: (newClusterId: string) => void;
+}
+
+function SplitPanel({ clusterId, onCancel, onSplit }: SplitPanelProps) {
+  const [faces, setFaces] = useState<FaceRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [newLabel, setNewLabel] = useState("");
+  const [splitting, setSplitting] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/faces/clusters/${clusterId}/faces`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`API error ${res.status}`);
+        return res.json() as Promise<{ faces: FaceRow[]; total: number }>;
+      })
+      .then((data) => setFaces(data.faces))
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load faces"))
+      .finally(() => setLoading(false));
+  }, [clusterId]);
+
+  const toggleFace = useCallback((id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleSplit = useCallback(async () => {
+    if (selected.size === 0) return;
+    setSplitting(true);
+    try {
+      const res = await fetch(`/api/faces/clusters/${clusterId}/split`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          faceIds: Array.from(selected),
+          label: newLabel.trim() || undefined,
+        }),
+      });
+      if (!res.ok) throw new Error(`API error ${res.status}`);
+      const data = (await res.json()) as { newCluster: { id: string } };
+      onSplit(data.newCluster.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Split failed");
+    } finally {
+      setSplitting(false);
+    }
+  }, [clusterId, selected, newLabel, onSplit]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16 text-sm text-zinc-400">
+        Loading faces…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-400">
+        {error}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Instructions */}
+      <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300">
+        Select all faces that belong to a <strong>different person</strong>, then click
+        &ldquo;Split&rdquo; to move them into a new cluster.
+      </div>
+
+      {faces.length === 0 ? (
+        <p className="py-12 text-center text-sm text-zinc-400">No faces in this cluster.</p>
+      ) : (
+        <>
+          {/* Face crop grid */}
+          <div className="flex flex-wrap gap-2">
+            {faces.map((face) => (
+              <FaceCrop
+                key={face.id}
+                face={face}
+                selected={selected.has(face.id)}
+                onToggle={() => toggleFace(face.id)}
+              />
+            ))}
+          </div>
+
+          {/* Select-all / clear controls */}
+          <div className="mt-3 flex gap-3 text-xs text-zinc-500">
+            <button
+              type="button"
+              onClick={() => setSelected(new Set(faces.map((f) => f.id)))}
+              className="hover:text-zinc-900 dark:hover:text-zinc-100"
+            >
+              Select all
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelected(new Set())}
+              className="hover:text-zinc-900 dark:hover:text-zinc-100"
+            >
+              Clear
+            </button>
+            <span>
+              {selected.size} / {faces.length} selected
+            </span>
+          </div>
+        </>
+      )}
+
+      {/* Split action bar */}
+      {selected.size > 0 && (
+        <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+          <input
+            type="text"
+            value={newLabel}
+            onChange={(e) => setNewLabel(e.target.value)}
+            maxLength={100}
+            placeholder="Name for new cluster (optional)"
+            className="flex-1 rounded border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-blue-500 focus:outline-none dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
+          />
+          <button
+            type="button"
+            onClick={handleSplit}
+            disabled={splitting}
+            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {splitting
+              ? "Splitting…"
+              : `Split ${selected.size} face${selected.size === 1 ? "" : "s"}`}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={splitting}
+            className="rounded border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {selected.size === 0 && (
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Cluster detail page ──────────────────────────────────────────────────────
 
 const LIMIT = 48;
 
 export default function FaceClusterPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
 
   const [cluster, setCluster] = useState<ClusterRow | null>(null);
   const [photosData, setPhotosData] = useState<ClusterPhotosResponse | null>(null);
@@ -220,6 +470,7 @@ export default function FaceClusterPage({ params }: { params: Promise<{ id: stri
   const [loadingPhotos, setLoadingPhotos] = useState(true);
   const [clusterError, setClusterError] = useState<string | null>(null);
   const [photosError, setPhotosError] = useState<string | null>(null);
+  const [splitMode, setSplitMode] = useState(false);
 
   // Fetch cluster info
   useEffect(() => {
@@ -267,6 +518,14 @@ export default function FaceClusterPage({ params }: { params: Promise<{ id: stri
     setCluster((prev) => (prev ? { ...prev, label: newLabel } : prev));
   }, []);
 
+  const handleSplitDone = useCallback(
+    (newClusterId: string) => {
+      // Navigate to the newly created cluster so the user can label it
+      router.push(`/faces/${newClusterId}`);
+    },
+    [router]
+  );
+
   const isLoading = loadingCluster || loadingPhotos;
   const error = clusterError ?? photosError;
 
@@ -281,71 +540,90 @@ export default function FaceClusterPage({ params }: { params: Promise<{ id: stri
       </Link>
 
       {/* Header */}
-      <div className="mb-6 mt-2">
-        {loadingCluster ? (
-          <div className="h-8 w-48 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" />
-        ) : cluster ? (
-          <LabelEditor clusterId={id} initialLabel={cluster.label} onSaved={handleLabelSaved} />
-        ) : null}
-        {cluster && (
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            {cluster.photoCount.toLocaleString()} {cluster.photoCount === 1 ? "photo" : "photos"}
-          </p>
+      <div className="mb-6 mt-2 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          {loadingCluster ? (
+            <div className="h-8 w-48 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" />
+          ) : cluster ? (
+            <LabelEditor clusterId={id} initialLabel={cluster.label} onSaved={handleLabelSaved} />
+          ) : null}
+          {cluster && (
+            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+              {cluster.photoCount.toLocaleString()} {cluster.photoCount === 1 ? "photo" : "photos"}
+            </p>
+          )}
+        </div>
+
+        {/* Split cluster toggle */}
+        {!loadingCluster && cluster && !splitMode && (
+          <button
+            type="button"
+            onClick={() => setSplitMode(true)}
+            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            Split cluster
+          </button>
         )}
       </div>
 
-      {/* Loading */}
-      {isLoading && (
-        <div className="flex items-center justify-center py-24 text-zinc-400 dark:text-zinc-600">
-          <span className="text-sm">Loading…</span>
-        </div>
+      {/* Split mode UI */}
+      {splitMode && (
+        <SplitPanel clusterId={id} onCancel={() => setSplitMode(false)} onSplit={handleSplitDone} />
       )}
 
-      {/* Error */}
-      {!isLoading && error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-400">
-          {error}
-        </div>
-      )}
-
-      {/* Empty state */}
-      {!isLoading && !error && photosData?.photos.length === 0 && (
-        <div className="py-24 text-center text-sm text-zinc-400 dark:text-zinc-600">
-          No photos found for this person.
-        </div>
-      )}
-
-      {/* Photo grid */}
-      {!isLoading && !error && photosData && photosData.photos.length > 0 && (
+      {/* Normal photo view (hidden in split mode) */}
+      {!splitMode && (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-            {photosData.photos.map((photo) => (
-              <PhotoCard key={photo.id} photo={photo} />
-            ))}
-          </div>
+          {isLoading && (
+            <div className="flex items-center justify-center py-24 text-zinc-400 dark:text-zinc-600">
+              <span className="text-sm">Loading…</span>
+            </div>
+          )}
 
-          {/* Pagination */}
-          <div className="mt-8 flex items-center justify-center gap-3">
-            <button
-              type="button"
-              onClick={() => fetchPhotos(page - 1)}
-              disabled={page <= 1 || loadingPhotos}
-              className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            >
-              Previous
-            </button>
-            <span className="text-sm text-zinc-500 dark:text-zinc-400">
-              Page {page} of {Math.max(1, Math.ceil((photosData.pagination.total ?? 0) / LIMIT))}
-            </span>
-            <button
-              type="button"
-              onClick={() => fetchPhotos(page + 1)}
-              disabled={!photosData.pagination.hasMore || loadingPhotos}
-              className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            >
-              Next
-            </button>
-          </div>
+          {!isLoading && error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-400">
+              {error}
+            </div>
+          )}
+
+          {!isLoading && !error && photosData?.photos.length === 0 && (
+            <div className="py-24 text-center text-sm text-zinc-400 dark:text-zinc-600">
+              No photos found for this person.
+            </div>
+          )}
+
+          {!isLoading && !error && photosData && photosData.photos.length > 0 && (
+            <>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+                {photosData.photos.map((photo) => (
+                  <PhotoCard key={photo.id} photo={photo} />
+                ))}
+              </div>
+
+              <div className="mt-8 flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => fetchPhotos(page - 1)}
+                  disabled={page <= 1 || loadingPhotos}
+                  className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  Previous
+                </button>
+                <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                  Page {page} of{" "}
+                  {Math.max(1, Math.ceil((photosData.pagination.total ?? 0) / LIMIT))}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => fetchPhotos(page + 1)}
+                  disabled={!photosData.pagination.hasMore || loadingPhotos}
+                  className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                >
+                  Next
+                </button>
+              </div>
+            </>
+          )}
         </>
       )}
     </div>
