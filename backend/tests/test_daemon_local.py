@@ -266,8 +266,8 @@ class TestLocalSourceSkipsKnown:
         )
 
         local_files = [
-            _local_file("/mnt/test/old.jpg", "old.jpg"),   # known
-            _local_file("/mnt/test/new.jpg", "new.jpg"),   # new
+            _local_file("/mnt/test/old.jpg", "old.jpg"),  # known
+            _local_file("/mnt/test/new.jpg", "new.jpg"),  # new
         ]
 
         with (

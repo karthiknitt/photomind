@@ -185,7 +185,7 @@ class TestClusterLoop:
         mock_cluster.assert_called_once()
 
     def test_clustering_not_recalled_before_interval(self) -> None:
-        """After a successful run, clustering does not fire again before the interval."""
+        """After a successful run, clustering does not re-fire before the interval."""
         stop_event = threading.Event()
         call_count = 0
 
@@ -251,7 +251,7 @@ class TestClusterLoop:
         mock_cluster.assert_not_called()
 
     def test_clustering_called_with_correct_args(self) -> None:
-        """run_clustering receives the db_path and chroma_client passed to _cluster_loop."""
+        """run_clustering receives the db_path and chroma_client from _cluster_loop."""
         stop_event = threading.Event()
         mock_client = MagicMock()
 

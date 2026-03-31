@@ -156,9 +156,7 @@ class TestRunClusteringEmpty:
         emb = [0.1] * 512
         mock_client = _mock_chroma([face_id], [emb])
 
-        result = cluster_mod.run_clustering(
-            db_path, mock_client, min_cluster_size=2
-        )
+        result = cluster_mod.run_clustering(db_path, mock_client, min_cluster_size=2)
 
         assert result.n_faces == 1
         assert result.n_clusters == 0
@@ -193,9 +191,7 @@ class TestRunClusteringSuccess:
         )
         mock_client = _mock_chroma(face_ids, embeddings)
 
-        result = cluster_mod.run_clustering(
-            db_path, mock_client, min_cluster_size=2
-        )
+        result = cluster_mod.run_clustering(db_path, mock_client, min_cluster_size=2)
 
         assert result.n_faces == 10
         assert result.n_clusters == 2
@@ -216,9 +212,7 @@ class TestRunClusteringSuccess:
         )
         mock_client = _mock_chroma(face_ids, embeddings)
 
-        result = cluster_mod.run_clustering(
-            db_path, mock_client, min_cluster_size=2
-        )
+        result = cluster_mod.run_clustering(db_path, mock_client, min_cluster_size=2)
 
         face_map = _read_faces(db_path)
         clustered = [v for v in face_map.values() if v is not None]

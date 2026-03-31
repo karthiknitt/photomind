@@ -292,6 +292,7 @@ class TestProcessedCountIncrements:
     ) -> None:
         """After each process_photo call, processed_count must be updated in DB."""
         _seed_job(db_path, "job-live", str(image_dir))
+
         def record_count(**_kwargs: object) -> str:
             # This is called after process_photo, but we want to check what the
             # runner sets AFTER returning from process_photo — so use a side effect
