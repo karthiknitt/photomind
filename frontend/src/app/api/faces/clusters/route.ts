@@ -1,4 +1,4 @@
-import { desc, gt, sql } from "drizzle-orm";
+import { and, desc, gt, isNotNull, isNull, sql } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/client";
 import { faceClusters } from "@/lib/db/schema";
@@ -20,11 +20,28 @@ interface ClustersResponse {
 
 // ─── Route handler ────────────────────────────────────────────────────────────
 
-export async function GET(_request: NextRequest): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
+    const { searchParams } = new URL(request.url);
+    // label=null  → only unlabeled, label=set → only labeled, omit → all
+    const labelFilter = searchParams.get("label");
+    const limit = Number(searchParams.get("limit")) || undefined;
+
+    // Build label condition
+    const labelCondition =
+      labelFilter === "null"
+        ? isNull(faceClusters.label)
+        : labelFilter === "set"
+          ? isNotNull(faceClusters.label)
+          : undefined;
+
+    const whereClause = labelCondition
+      ? and(gt(faceClusters.photoCount, 0), labelCondition)
+      : gt(faceClusters.photoCount, 0);
+
     // Get all clusters with photoCount > 0, ordered by photoCount desc.
     // For each cluster, find one representative face's photoId via a raw subquery.
-    const rows = await db
+    let query = db
       .select({
         id: faceClusters.id,
         label: faceClusters.label,
@@ -35,8 +52,15 @@ export async function GET(_request: NextRequest): Promise<NextResponse> {
         )`,
       })
       .from(faceClusters)
-      .where(gt(faceClusters.photoCount, 0))
-      .orderBy(desc(faceClusters.photoCount));
+      .where(whereClause)
+      .orderBy(desc(faceClusters.photoCount))
+      .$dynamic();
+
+    if (limit) {
+      query = query.limit(limit);
+    }
+
+    const rows = await query;
 
     const clusters: ClusterRow[] = rows.map((row) => ({
       id: row.id,

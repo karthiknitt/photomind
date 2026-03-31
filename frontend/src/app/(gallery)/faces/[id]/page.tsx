@@ -4,8 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useRef, useState } from "react";
-import { CROP_PX, FaceCrop } from "@/components/face-crop";
 import type { FaceRow } from "@/components/face-crop";
+import { FaceCrop } from "@/components/face-crop";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

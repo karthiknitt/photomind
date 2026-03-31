@@ -43,7 +43,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "isSame must be a boolean" }, { status: 400 });
   }
   if (clusterIdA === clusterIdB) {
-    return NextResponse.json({ error: "clusterIdA and clusterIdB must be different" }, { status: 400 });
+    return NextResponse.json(
+      { error: "clusterIdA and clusterIdB must be different" },
+      { status: 400 }
+    );
   }
 
   try {

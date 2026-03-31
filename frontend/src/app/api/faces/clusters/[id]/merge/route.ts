@@ -68,10 +68,7 @@ export async function POST(
     }
 
     // 2. Move all faces from source to target
-    await db
-      .update(faces)
-      .set({ clusterId: targetId })
-      .where(eq(faces.clusterId, sourceClusterId));
+    await db.update(faces).set({ clusterId: targetId }).where(eq(faces.clusterId, sourceClusterId));
 
     // 3. Recount photoCount on target
     const [countRow] = await db
@@ -98,10 +95,7 @@ export async function POST(
     });
 
     // 6. Return updated target cluster
-    const [updated] = await db
-      .select()
-      .from(faceClusters)
-      .where(eq(faceClusters.id, targetId));
+    const [updated] = await db.select().from(faceClusters).where(eq(faceClusters.id, targetId));
 
     const response: MergeResponse = {
       cluster: {

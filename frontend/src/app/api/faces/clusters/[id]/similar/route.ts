@@ -20,9 +20,7 @@ interface SimilarResponse {
 // ─── Route handler ────────────────────────────────────────────────────────────
 
 const BRIDGE_URL =
-  process.env.FACE_IDENTIFY_BRIDGE_URL ??
-  process.env.CLIP_BRIDGE_URL ??
-  "http://127.0.0.1:8765";
+  process.env.FACE_IDENTIFY_BRIDGE_URL ?? process.env.CLIP_BRIDGE_URL ?? "http://127.0.0.1:8765";
 
 const MAX_SUGGESTIONS = 5;
 const MAX_DISTANCE = 0.65; // cosine distance threshold (similarity > 35%)
@@ -35,10 +33,7 @@ export async function GET(
 
   try {
     // 1. Check cluster exists
-    const [cluster] = await db
-      .select()
-      .from(faceClusters)
-      .where(eq(faceClusters.id, id));
+    const [cluster] = await db.select().from(faceClusters).where(eq(faceClusters.id, id));
 
     if (!cluster) {
       return NextResponse.json({ error: "Cluster not found" }, { status: 404 });
@@ -63,12 +58,7 @@ export async function GET(
     const existingPairs = await db
       .select({ clusterIdA: faceClusterPairs.clusterIdA, clusterIdB: faceClusterPairs.clusterIdB })
       .from(faceClusterPairs)
-      .where(
-        or(
-          eq(faceClusterPairs.clusterIdA, id),
-          eq(faceClusterPairs.clusterIdB, id)
-        )
-      );
+      .where(or(eq(faceClusterPairs.clusterIdA, id), eq(faceClusterPairs.clusterIdB, id)));
 
     const pairedIds = new Set<string>();
     for (const pair of existingPairs) {
@@ -119,7 +109,10 @@ export async function GET(
 
     // 6. Group by cluster_id, compute avg distance, pick representative face
     const distanceByFace = new Map(bridgeResults.map((r) => [r.id, r.distance]));
-    const clusterGroups = new Map<string, { totalDist: number; count: number; bestFaceId: string; bestDist: number }>();
+    const clusterGroups = new Map<
+      string,
+      { totalDist: number; count: number; bestFaceId: string; bestDist: number }
+    >();
 
     for (const faceId of resultFaceIds) {
       const cid = faceToCluster.get(faceId);
@@ -149,14 +142,19 @@ export async function GET(
     }
 
     const clusterMeta = await db
-      .select({ id: faceClusters.id, label: faceClusters.label, photoCount: faceClusters.photoCount })
+      .select({
+        id: faceClusters.id,
+        label: faceClusters.label,
+        photoCount: faceClusters.photoCount,
+      })
       .from(faceClusters)
       .where(and(inArray(faceClusters.id, candidateIds), isNull(faceClusters.label)));
 
     // 8. Build response, sort by avgSimilarity desc, top 5
     const results: SimilarCluster[] = clusterMeta
-      .map((c) => {
-        const group = clusterGroups.get(c.id)!;
+      .flatMap((c) => {
+        const group = clusterGroups.get(c.id);
+        if (!group) return [];
         const avgDist = group.totalDist / group.count;
         return {
           id: c.id,

@@ -119,11 +119,7 @@ function makeFace(
   };
 }
 
-function makePair(
-  clusterIdA: string,
-  clusterIdB: string,
-  isSame: boolean
-): NewFaceClusterPair {
+function makePair(clusterIdA: string, clusterIdB: string, isSame: boolean): NewFaceClusterPair {
   const [a, b] = [clusterIdA, clusterIdB].sort();
   return {
     id: crypto.randomUUID(),
@@ -138,9 +134,9 @@ function makePair(
 
 async function getSimilar(clusterId: string) {
   const { GET } = await import("@/app/api/faces/clusters/[id]/similar/route");
-  const req = new Request(
-    `http://localhost/api/faces/clusters/${clusterId}/similar`
-  ) as Parameters<typeof GET>[0];
+  const req = new Request(`http://localhost/api/faces/clusters/${clusterId}/similar`) as Parameters<
+    typeof GET
+  >[0];
   return GET(req, { params: Promise.resolve({ id: clusterId }) });
 }
 
