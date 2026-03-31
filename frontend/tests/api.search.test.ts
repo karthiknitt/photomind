@@ -14,12 +14,11 @@
  */
 
 import { Database } from "bun:sqlite";
-import { mock } from "bun:test";
 import path from "node:path";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NewPhoto } from "@/lib/db/schema";
 import * as schema from "@/lib/db/schema";
 import { photos } from "@/lib/db/schema";
@@ -28,24 +27,30 @@ import { photos } from "@/lib/db/schema";
 
 type TestDb = ReturnType<typeof drizzle<typeof schema>>;
 
-// Shared mutable cell. Each test sets current to its own in-memory DB.
-const _cell: { current: TestDb | null } = { current: null };
-
-// Proxy forwards all drizzle method calls to the current test DB.
-const dbProxy = new Proxy({} as TestDb, {
-  get(_, prop: string | symbol) {
-    if (!_cell.current) {
-      throw new Error(`[test] DB proxy accessed but _cell.current is null (prop=${String(prop)})`);
-    }
-    // biome-ignore lint/suspicious/noExplicitAny: proxy forwarding
-    const target = _cell.current as any;
-    const val = target[prop];
-    return typeof val === "function" ? val.bind(target) : val;
-  },
+// vi.hoisted ensures _cell and dbProxy are initialized before vi.mock factory runs.
+// (vi.mock is hoisted above imports; factories that reference module-scope variables
+// must use vi.hoisted so those variables exist at factory call time.)
+const { _cell, dbProxy } = vi.hoisted(() => {
+  // biome-ignore lint/suspicious/noExplicitAny: imported TestDb type unavailable here
+  const _cell: { current: any } = { current: null };
+  // biome-ignore lint/suspicious/noExplicitAny: proxy forwarding — TestDb unavailable here
+  const dbProxy = new Proxy({} as any, {
+    get(_, prop: string | symbol) {
+      if (!_cell.current) {
+        throw new Error(
+          `[test] DB proxy accessed but _cell.current is null (prop=${String(prop)})`
+        );
+      }
+      const target = _cell.current;
+      const val = target[prop];
+      return typeof val === "function" ? val.bind(target) : val;
+    },
+  });
+  return { _cell, dbProxy };
 });
 
 // Install mock before any imports of @/lib/db/client can happen.
-mock.module("@/lib/db/client", () => ({ db: dbProxy }));
+vi.mock("@/lib/db/client", () => ({ db: dbProxy }));
 
 // ─── DB factory ───────────────────────────────────────────────────────────────
 

@@ -16,15 +16,9 @@
  * - GET /api/import/[id] with unknown id returns 404
  */
 
-import { mock } from "bun:test";
-import { createRequire } from "node:module";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// ─── Capture real node:fs BEFORE mocking ──────────────────────────────────────
-const _realRequire = createRequire(import.meta.url);
-const _realFs = _realRequire("node:fs") as typeof import("node:fs");
-
-// ─── Mutable cells ────────────────────────────────────────────────────────────
+// ─── Mutable cells (hoisted so vi.mock factories can reference them) ──────────
 
 interface ImportJobRow {
   id: string;
@@ -38,35 +32,39 @@ interface ImportJobRow {
   finishedAt: number | null;
 }
 
-const _dbCell: {
-  jobs: ImportJobRow[];
-  inserted: ImportJobRow[];
-} = {
-  jobs: [],
-  inserted: [],
-};
-
 interface SpawnResult {
   unref: () => void;
 }
 
-const _spawnCell: {
-  calls: Array<{ cmd: string; args: string[]; opts: object }>;
-  result: SpawnResult;
-} = {
-  calls: [],
-  result: { unref: () => {} },
-};
+// Extend the cell type to include the side-channel for `where` filtering
+interface DbCell {
+  jobs: ImportJobRow[];
+  inserted: ImportJobRow[];
+  _whereId?: string;
+}
 
-// When null, falls through to real fs — prevents breaking drizzle migration reads
-// in other test files sharing the same bun:test worker.
-const _fsCell: {
-  existsSync: ((p: string) => boolean) | null;
-  statSync: ((p: string) => { isDirectory: () => boolean }) | null;
-} = {
-  existsSync: null,
-  statSync: null,
-};
+const { _dbCell, _spawnCell, _fsCell } = vi.hoisted(() => {
+  const _dbCell: {
+    jobs: ImportJobRow[];
+    inserted: ImportJobRow[];
+    _whereId?: string;
+  } = { jobs: [], inserted: [] };
+
+  const _spawnCell: {
+    calls: Array<{ cmd: string; args: string[]; opts: object }>;
+    result: SpawnResult;
+  } = { calls: [], result: { unref: () => {} } };
+
+  const _fsCell: {
+    existsSync: ((p: string) => boolean) | null;
+    statSync: ((p: string) => { isDirectory: () => boolean }) | null;
+  } = { existsSync: null, statSync: null };
+
+  return { _dbCell, _spawnCell, _fsCell };
+});
+
+// Alias with extended type for _whereId side-channel
+const dbCell = _dbCell as DbCell;
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -74,7 +72,7 @@ const _fsCell: {
 // The route uses: db.select(...).from(...).orderBy(...).limit(...) for GET list
 //                 db.select(...).from(...).where(...) for GET [id]
 //                 db.insert(...).values(...) for POST
-mock.module("@/lib/db/client", () => ({
+vi.mock("@/lib/db/client", () => ({
   db: {
     select: (_fields: unknown) => ({
       from: (_table: unknown) => ({
@@ -100,52 +98,43 @@ mock.module("@/lib/db/client", () => ({
   } as unknown,
 }));
 
-// Extend the cell type to include the side-channel for `where` filtering
-interface DbCell {
-  jobs: ImportJobRow[];
-  inserted: ImportJobRow[];
-  _whereId?: string;
-}
-// Patch type retroactively
-const dbCell = _dbCell as DbCell;
-
-// Mock node:fs — expose full union of exports used across all test files to avoid
-// mock.module collision when tests run in the same bun:test worker.
-// Falls through to real node:fs for functions not overridden by the cell.
-// Also include a `default` export so CJS-style `import fs from 'node:fs'` works.
-mock.module("node:fs", () => {
+// Mock node:fs — falls through to real fs for functions not overridden by the cell,
+// so drizzle migration reads and other internal node:fs uses are unaffected.
+// importOriginal() bypasses the mock to get the real module.
+vi.mock("node:fs", async (importOriginal) => {
+  const realFs = await importOriginal<typeof import("node:fs")>();
   const mod = {
-    existsSync: (p: string) => (_fsCell.existsSync ? _fsCell.existsSync(p) : _realFs.existsSync(p)),
+    existsSync: (p: string) => (_fsCell.existsSync ? _fsCell.existsSync(p) : realFs.existsSync(p)),
     statSync: (p: string) =>
       _fsCell.statSync
         ? _fsCell.statSync(p)
         : // biome-ignore lint/suspicious/noExplicitAny: pass-through
-          (_realFs.statSync as any)(p),
+          (realFs.statSync as any)(p),
     // Pass-through stubs for exports used by other routes
-    readFileSync: (...args: Parameters<typeof _realFs.readFileSync>) =>
+    readFileSync: (...args: Parameters<typeof realFs.readFileSync>) =>
       // biome-ignore lint/suspicious/noExplicitAny: pass-through
-      (_realFs.readFileSync as any)(...args),
-    writeFileSync: (...args: Parameters<typeof _realFs.writeFileSync>) =>
+      (realFs.readFileSync as any)(...args),
+    writeFileSync: (...args: Parameters<typeof realFs.writeFileSync>) =>
       // biome-ignore lint/suspicious/noExplicitAny: pass-through
-      (_realFs.writeFileSync as any)(...args),
-    appendFileSync: (...args: Parameters<typeof _realFs.appendFileSync>) =>
+      (realFs.writeFileSync as any)(...args),
+    appendFileSync: (...args: Parameters<typeof realFs.appendFileSync>) =>
       // biome-ignore lint/suspicious/noExplicitAny: pass-through
-      (_realFs.appendFileSync as any)(...args),
-    mkdirSync: (...args: Parameters<typeof _realFs.mkdirSync>) =>
+      (realFs.appendFileSync as any)(...args),
+    mkdirSync: (...args: Parameters<typeof realFs.mkdirSync>) =>
       // biome-ignore lint/suspicious/noExplicitAny: pass-through
-      (_realFs.mkdirSync as any)(...args),
-    readdirSync: (...args: Parameters<typeof _realFs.readdirSync>) =>
+      (realFs.mkdirSync as any)(...args),
+    readdirSync: (...args: Parameters<typeof realFs.readdirSync>) =>
       // biome-ignore lint/suspicious/noExplicitAny: pass-through
-      (_realFs.readdirSync as any)(...args),
-    realpathSync: (...args: Parameters<typeof _realFs.realpathSync>) =>
+      (realFs.readdirSync as any)(...args),
+    realpathSync: (...args: Parameters<typeof realFs.realpathSync>) =>
       // biome-ignore lint/suspicious/noExplicitAny: pass-through
-      (_realFs.realpathSync as any)(...args),
+      (realFs.realpathSync as any)(...args),
   };
   return { ...mod, default: mod };
 });
 
 // Mock node:child_process — expose full union of exports (spawn + spawnSync)
-mock.module("node:child_process", () => ({
+vi.mock("node:child_process", () => ({
   spawn: (cmd: string, args: string[], opts: object): SpawnResult => {
     _spawnCell.calls.push({ cmd, args, opts });
     return _spawnCell.result;
@@ -155,8 +144,8 @@ mock.module("node:child_process", () => ({
 }));
 
 // ─── Global reset ─────────────────────────────────────────────────────────────
-// Reset cells to null/empty before each test so other test files' code falls
-// through to real node:fs (e.g. drizzle migration reads are unaffected).
+// Reset cells before each test so unrelated tests fall through to real node:fs
+// (e.g. drizzle migration reads in other test files are unaffected).
 beforeEach(() => {
   _fsCell.existsSync = null;
   _fsCell.statSync = null;

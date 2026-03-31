@@ -34,7 +34,6 @@ from photomind.worker.daemon import run_scan
 RCLONE_PATCH = "photomind.worker.daemon.rclone"
 LOCAL_SCANNER_PATCH = "photomind.worker.daemon.local_scanner"
 PIPELINE_PATCH = "photomind.worker.daemon.process_photo"
-CLIP_PATCH = "photomind.worker.daemon.clip"
 
 
 # ---------------------------------------------------------------------------
@@ -49,9 +48,12 @@ def db_path(tmp_path: Path) -> Path:
 
 @pytest.fixture()
 def chroma_mock() -> MagicMock:
+    """Mock ChromaDB CLIENT (not collection) — run_scan receives a client."""
+    client = MagicMock()
     coll = MagicMock()
     coll.upsert = MagicMock()
-    return coll
+    client.get_or_create_collection.return_value = coll
+    return client
 
 
 @pytest.fixture()
@@ -127,9 +129,8 @@ class TestLocalSourceDispatch:
                 f"{LOCAL_SCANNER_PATCH}.list_local_files", return_value=local_files
             ) as mock_list,
             patch(PIPELINE_PATCH, return_value="uuid-1"),
-            patch(f"{CLIP_PATCH}.get_chroma_collection", return_value=chroma_mock),
         ):
-            run_scan(local_config)
+            run_scan(local_config, chroma_mock)
 
         mock_list.assert_called_once_with("/mnt/test")
 
@@ -143,9 +144,8 @@ class TestLocalSourceDispatch:
             patch(f"{LOCAL_SCANNER_PATCH}.list_local_files", return_value=[]),
             patch(f"{RCLONE_PATCH}.list_files") as mock_rclone,
             patch(PIPELINE_PATCH, return_value="uuid-1"),
-            patch(f"{CLIP_PATCH}.get_chroma_collection", return_value=chroma_mock),
         ):
-            run_scan(local_config)
+            run_scan(local_config, chroma_mock)
 
         mock_rclone.assert_not_called()
 
@@ -160,9 +160,8 @@ class TestLocalSourceDispatch:
         with (
             patch(f"{LOCAL_SCANNER_PATCH}.list_local_files", return_value=local_files),
             patch(PIPELINE_PATCH, return_value="uuid-1") as mock_process,
-            patch(f"{CLIP_PATCH}.get_chroma_collection", return_value=chroma_mock),
         ):
-            run_scan(local_config)
+            run_scan(local_config, chroma_mock)
 
         assert mock_process.call_count == 1
         _, kwargs = mock_process.call_args
@@ -179,9 +178,8 @@ class TestLocalSourceDispatch:
         with (
             patch(f"{LOCAL_SCANNER_PATCH}.list_local_files", return_value=local_files),
             patch(PIPELINE_PATCH, return_value="uuid-1") as mock_process,
-            patch(f"{CLIP_PATCH}.get_chroma_collection", return_value=chroma_mock),
         ):
-            run_scan(local_config)
+            run_scan(local_config, chroma_mock)
 
         _, kwargs = mock_process.call_args
         assert kwargs["source_path"] == "/mnt/test/img.jpg"
@@ -201,9 +199,8 @@ class TestLocalSourceDispatch:
         with (
             patch(f"{LOCAL_SCANNER_PATCH}.list_local_files", return_value=local_files),
             patch(PIPELINE_PATCH, return_value="uuid-1") as mock_process,
-            patch(f"{CLIP_PATCH}.get_chroma_collection", return_value=chroma_mock),
         ):
-            run_scan(local_config)
+            run_scan(local_config, chroma_mock)
 
         assert mock_process.call_count == 3
 
@@ -239,9 +236,8 @@ class TestLocalSourceSkipsKnown:
         with (
             patch(f"{LOCAL_SCANNER_PATCH}.list_local_files", return_value=local_files),
             patch(PIPELINE_PATCH, return_value="uuid-1") as mock_process,
-            patch(f"{CLIP_PATCH}.get_chroma_collection", return_value=chroma_mock),
         ):
-            run_scan(local_config)
+            run_scan(local_config, chroma_mock)
 
         mock_process.assert_not_called()
 
@@ -273,9 +269,8 @@ class TestLocalSourceSkipsKnown:
         with (
             patch(f"{LOCAL_SCANNER_PATCH}.list_local_files", return_value=local_files),
             patch(PIPELINE_PATCH, return_value="uuid-2") as mock_process,
-            patch(f"{CLIP_PATCH}.get_chroma_collection", return_value=chroma_mock),
         ):
-            run_scan(local_config)
+            run_scan(local_config, chroma_mock)
 
         assert mock_process.call_count == 1
         _, kwargs = mock_process.call_args
@@ -301,9 +296,8 @@ class TestMixedSourceScan:
             patch(f"{RCLONE_PATCH}.list_files", return_value=cloud_files),
             patch(f"{LOCAL_SCANNER_PATCH}.list_local_files", return_value=local_files),
             patch(PIPELINE_PATCH, return_value="uuid-1") as mock_process,
-            patch(f"{CLIP_PATCH}.get_chroma_collection", return_value=chroma_mock),
         ):
-            run_scan(mixed_config)
+            run_scan(mixed_config, chroma_mock)
 
         assert mock_process.call_count == 2
 
@@ -319,9 +313,8 @@ class TestMixedSourceScan:
             patch(f"{RCLONE_PATCH}.list_files", return_value=cloud_files),
             patch(f"{LOCAL_SCANNER_PATCH}.list_local_files", return_value=[]),
             patch(PIPELINE_PATCH, return_value="uuid-1") as mock_process,
-            patch(f"{CLIP_PATCH}.get_chroma_collection", return_value=chroma_mock),
         ):
-            run_scan(mixed_config)
+            run_scan(mixed_config, chroma_mock)
 
         assert mock_process.call_count == 1
         _, kwargs = mock_process.call_args
@@ -339,9 +332,8 @@ class TestMixedSourceScan:
             patch(f"{RCLONE_PATCH}.list_files", return_value=[]),
             patch(f"{LOCAL_SCANNER_PATCH}.list_local_files", return_value=local_files),
             patch(PIPELINE_PATCH, return_value="uuid-1") as mock_process,
-            patch(f"{CLIP_PATCH}.get_chroma_collection", return_value=chroma_mock),
         ):
-            run_scan(mixed_config)
+            run_scan(mixed_config, chroma_mock)
 
         assert mock_process.call_count == 1
         _, kwargs = mock_process.call_args
@@ -385,8 +377,7 @@ class TestMixedSourceScan:
             patch(f"{RCLONE_PATCH}.list_files", return_value=cloud_files),
             patch(f"{LOCAL_SCANNER_PATCH}.list_local_files", return_value=local_files),
             patch(PIPELINE_PATCH, return_value="uuid-1") as mock_process,
-            patch(f"{CLIP_PATCH}.get_chroma_collection", return_value=chroma_mock),
         ):
-            run_scan(mixed_config)
+            run_scan(mixed_config, chroma_mock)
 
         mock_process.assert_not_called()

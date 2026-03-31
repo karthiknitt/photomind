@@ -16,17 +16,9 @@
  * - GET /api/sources/oauth-auth — returns {url} from rclone authorize output
  */
 
-import { mock } from "bun:test";
-import { createRequire } from "node:module";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// ─── Capture real node:fs BEFORE mocking ──────────────────────────────────────
-// This allows the mock to forward non-config-yaml calls (e.g. drizzle migration
-// JSON reads) to the real fs, preventing cross-file test pollution.
-const _realRequire = createRequire(import.meta.url);
-const _realFs = _realRequire("node:fs") as typeof import("node:fs");
-
-// ─── Mutable cells ────────────────────────────────────────────────────────────
+// ─── Mutable cells (hoisted so vi.mock factories can reference them) ──────────
 
 interface SpawnSyncResult {
   status: number | null;
@@ -42,86 +34,85 @@ interface FakeChildProcess {
   kill: () => void;
 }
 
-// When null, the mock falls through to the real fs function.
-const _fsCell: {
-  existsSync: ((p: string) => boolean) | null;
-  readFileSync: ((p: string, enc: BufferEncoding) => string) | null;
-  writeFileSync: ((p: string, data: string) => void) | null;
-  appendFileSync: ((p: string, data: string) => void) | null;
-  mkdirSync: ((p: string, opts?: { recursive?: boolean }) => void) | null;
-} = {
-  existsSync: null,
-  readFileSync: null,
-  writeFileSync: null,
-  appendFileSync: null,
-  mkdirSync: null,
-};
+const { _fsCell, _cpCell } = vi.hoisted(() => {
+  // When null, the mock falls through to the real fs function.
+  const _fsCell: {
+    existsSync: ((p: string) => boolean) | null;
+    readFileSync: ((p: string, enc: BufferEncoding) => string) | null;
+    writeFileSync: ((p: string, data: string) => void) | null;
+    appendFileSync: ((p: string, data: string) => void) | null;
+    mkdirSync: ((p: string, opts?: { recursive?: boolean }) => void) | null;
+  } = {
+    existsSync: null,
+    readFileSync: null,
+    writeFileSync: null,
+    appendFileSync: null,
+    mkdirSync: null,
+  };
 
-const _cpCell: {
-  spawnSync: (cmd: string, args: string[], opts?: object) => SpawnSyncResult;
-  spawn: (cmd: string, args: string[]) => FakeChildProcess;
-} = {
-  spawnSync: () => ({
-    status: 0,
-    stdout: Buffer.from(""),
-    stderr: Buffer.from(""),
-  }),
-  spawn: (_cmd, _args) => {
-    const cbMap: Record<string, ((...a: unknown[]) => void)[]> = {};
-    setTimeout(() => {
-      cbMap.close?.forEach((cb) => {
-        cb(0);
-      });
-    }, 5);
-    return {
-      stdout: { on: () => {} },
-      stderr: { on: () => {} },
-      on: (event, cb) => {
-        if (!cbMap[event]) cbMap[event] = [];
-        cbMap[event].push(cb);
-      },
-      kill: () => {},
-    };
-  },
-};
+  const _cpCell: {
+    spawnSync: (cmd: string, args: string[], opts?: object) => SpawnSyncResult;
+    spawn: (cmd: string, args: string[]) => FakeChildProcess;
+  } = {
+    spawnSync: () => ({ status: 0, stdout: Buffer.from(""), stderr: Buffer.from("") }),
+    spawn: (_cmd, _args) => {
+      const cbMap: Record<string, ((...a: unknown[]) => void)[]> = {};
+      setTimeout(() => {
+        cbMap.close?.forEach((cb) => {
+          cb(0);
+        });
+      }, 5);
+      return {
+        stdout: { on: () => {} },
+        stderr: { on: () => {} },
+        on: (event, cb) => {
+          if (!cbMap[event]) cbMap[event] = [];
+          cbMap[event].push(cb);
+        },
+        kill: () => {},
+      };
+    },
+  };
 
-// Mock node:fs — expose full union of exports used across all test files to avoid
-// mock.module collision when tests run in the same bun:test worker.
-// Falls through to real node:fs for any function not overridden by a cell,
+  return { _fsCell, _cpCell };
+});
+
+// ─── Mocks ────────────────────────────────────────────────────────────────────
+
+// Mock node:fs — falls through to real fs for any function not overridden by a cell,
 // so drizzle migration reads and other internal node:fs uses are unaffected.
-// Also include a `default` export so CJS-style `import fs from 'node:fs'` works.
-mock.module("node:fs", () => {
+// importOriginal() bypasses the mock to get the real module.
+vi.mock("node:fs", async (importOriginal) => {
+  const realFs = await importOriginal<typeof import("node:fs")>();
   const mod = {
-    existsSync: (p: string) => (_fsCell.existsSync ? _fsCell.existsSync(p) : _realFs.existsSync(p)),
+    existsSync: (p: string) => (_fsCell.existsSync ? _fsCell.existsSync(p) : realFs.existsSync(p)),
     readFileSync: (p: string, enc: BufferEncoding) =>
-      _fsCell.readFileSync
-        ? _fsCell.readFileSync(p, enc)
-        : (_realFs.readFileSync(p, enc) as string),
+      _fsCell.readFileSync ? _fsCell.readFileSync(p, enc) : (realFs.readFileSync(p, enc) as string),
     writeFileSync: (p: string, data: string) =>
-      _fsCell.writeFileSync ? _fsCell.writeFileSync(p, data) : _realFs.writeFileSync(p, data),
+      _fsCell.writeFileSync ? _fsCell.writeFileSync(p, data) : realFs.writeFileSync(p, data),
     appendFileSync: (p: string, data: string) =>
-      _fsCell.appendFileSync ? _fsCell.appendFileSync(p, data) : _realFs.appendFileSync(p, data),
+      _fsCell.appendFileSync ? _fsCell.appendFileSync(p, data) : realFs.appendFileSync(p, data),
     mkdirSync: (p: string, opts?: { recursive?: boolean }) =>
       _fsCell.mkdirSync
         ? _fsCell.mkdirSync(p, opts)
         : // biome-ignore lint/suspicious/noExplicitAny: pass-through
-          (_realFs.mkdirSync as any)(p, opts),
+          (realFs.mkdirSync as any)(p, opts),
     // Stubs for exports used by filesystem/route.ts and import/route.ts
-    readdirSync: (...args: Parameters<typeof _realFs.readdirSync>) =>
+    readdirSync: (...args: Parameters<typeof realFs.readdirSync>) =>
       // biome-ignore lint/suspicious/noExplicitAny: pass-through
-      (_realFs.readdirSync as any)(...args),
-    realpathSync: (...args: Parameters<typeof _realFs.realpathSync>) =>
+      (realFs.readdirSync as any)(...args),
+    realpathSync: (...args: Parameters<typeof realFs.realpathSync>) =>
       // biome-ignore lint/suspicious/noExplicitAny: pass-through
-      (_realFs.realpathSync as any)(...args),
-    statSync: (...args: Parameters<typeof _realFs.statSync>) =>
+      (realFs.realpathSync as any)(...args),
+    statSync: (...args: Parameters<typeof realFs.statSync>) =>
       // biome-ignore lint/suspicious/noExplicitAny: pass-through
-      (_realFs.statSync as any)(...args),
+      (realFs.statSync as any)(...args),
   };
   return { ...mod, default: mod };
 });
 
 // Mock node:child_process — expose full union of exports (spawnSync + spawn)
-mock.module("node:child_process", () => ({
+vi.mock("node:child_process", () => ({
   spawnSync: (cmd: string, args: string[], opts?: object) => _cpCell.spawnSync(cmd, args, opts),
   spawn: (cmd: string, args: string[]) => _cpCell.spawn(cmd, args),
 }));
