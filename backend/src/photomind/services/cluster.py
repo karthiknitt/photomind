@@ -83,7 +83,7 @@ def _open_db(db_path: str | Path) -> Generator[sqlite3.Connection, None, None]:
 
 def run_clustering(
     db_path: str | Path,
-    chroma_db_path: str | Path,
+    chroma_client: chromadb.ClientAPI,
     min_cluster_size: int = 2,
     min_samples: int = 1,
 ) -> ClusterResult:
@@ -96,7 +96,8 @@ def run_clustering(
 
     Args:
         db_path:          Path to the shared SQLite database.
-        chroma_db_path:   Directory where ChromaDB stores its data.
+        chroma_client:    Open ChromaDB client (shared by caller — do not
+                          create a second PersistentClient for the same path).
         min_cluster_size: Smallest grouping HDBSCAN will call a cluster.
         min_samples:      HDBSCAN min_samples (controls noise sensitivity).
 
@@ -104,7 +105,6 @@ def run_clustering(
         ClusterResult with n_faces, n_clusters, n_noise counts.
     """
     # ── Step 1: Fetch embeddings from ChromaDB ───────────────────────────────
-    chroma_client = chromadb.PersistentClient(path=str(chroma_db_path))
     try:
         collection = chroma_client.get_collection("faces")
     except Exception:

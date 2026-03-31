@@ -165,11 +165,10 @@ class TestFaceDetection:
 class TestStoreFaces:
     def test_store_faces_noop_for_empty_list(self, tmp_path: Path) -> None:
         db_path = tmp_path / "faces.db"
-        chroma_path = tmp_path / "chroma"
 
         from photomind.services.face import store_faces
 
-        store_faces(db_path, chroma_path, "photo-001", [])
+        store_faces(db_path, MagicMock(), "photo-001", [])
 
         # DB file may not even exist — if it does, table should have 0 rows
         if db_path.exists():
@@ -191,7 +190,6 @@ class TestStoreFaces:
         from photomind.services.face import FaceDetection, store_faces
 
         db_path = tmp_path / "faces.db"
-        chroma_path = tmp_path / "chroma"
         photo_id = "photo-abc"
         face_id = str(uuid.uuid4())
         embedding = [0.1] * 512
@@ -206,7 +204,7 @@ class TestStoreFaces:
             embedding=embedding,
         )
 
-        store_faces(db_path, chroma_path, photo_id, [fd])
+        store_faces(db_path, MagicMock(), photo_id, [fd])
 
         conn = sqlite3.connect(str(db_path))
         try:
@@ -254,12 +252,7 @@ class TestStoreFaces:
             col_name, metadata={"hnsw:space": "cosine"}
         )
 
-        with patch("photomind.services.face.chromadb") as mock_chroma_mod:
-            mock_client_instance = MagicMock()
-            mock_client_instance.get_or_create_collection.return_value = fake_collection
-            mock_chroma_mod.PersistentClient.return_value = mock_client_instance
-
-            store_faces(db_path, tmp_path / "chroma", photo_id, [fd])
+        store_faces(db_path, fake_collection, photo_id, [fd])
 
         assert fake_collection.count() == 1
 
@@ -267,7 +260,6 @@ class TestStoreFaces:
         from photomind.services.face import FaceDetection, store_faces
 
         db_path = tmp_path / "faces.db"
-        chroma_path = tmp_path / "chroma"
         photo_id = "photo-multi"
 
         in_mem_client = chromadb.Client()
@@ -289,12 +281,7 @@ class TestStoreFaces:
             )
             faces_list.append(fd)
 
-        with patch("photomind.services.face.chromadb") as mock_chroma_mod:
-            mock_client_instance = MagicMock()
-            mock_client_instance.get_or_create_collection.return_value = fake_collection
-            mock_chroma_mod.PersistentClient.return_value = mock_client_instance
-
-            store_faces(db_path, chroma_path, photo_id, faces_list)
+        store_faces(db_path, fake_collection, photo_id, faces_list)
 
         # Check SQLite rows
         conn = sqlite3.connect(str(db_path))
@@ -333,12 +320,7 @@ class TestStoreFaces:
             col_name, metadata={"hnsw:space": "cosine"}
         )
 
-        with patch("photomind.services.face.chromadb") as mock_chroma_mod:
-            mock_client_instance = MagicMock()
-            mock_client_instance.get_or_create_collection.return_value = fake_collection
-            mock_chroma_mod.PersistentClient.return_value = mock_client_instance
-
-            store_faces(db_path, tmp_path / "chroma", "photo-null-cluster", [fd])
+        store_faces(db_path, fake_collection, "photo-null-cluster", [fd])
 
         conn = sqlite3.connect(str(db_path))
         try:

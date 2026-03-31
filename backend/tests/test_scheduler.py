@@ -29,6 +29,7 @@ SLEEP_PATCH = "photomind.worker.scheduler.time.sleep"
 CLUSTER_PATCH = "photomind.worker.scheduler.run_clustering"
 TIME_PATCH = "photomind.worker.scheduler.time.time"
 THREAD_PATCH = "photomind.worker.scheduler.threading.Thread"
+CHROMA_CLIENT_PATCH = "photomind.worker.scheduler.get_chroma_client"
 
 
 @pytest.fixture()
@@ -51,16 +52,17 @@ class TestRunForever:
         """run_scan must be called at least once immediately."""
         call_count = 0
 
-        def _scan(cfg: PhotoMindConfig) -> None:
+        def _scan(cfg: PhotoMindConfig, chroma_client: object) -> None:
             nonlocal call_count
             call_count += 1
             if call_count >= 1:
                 raise KeyboardInterrupt
 
-        with patch(SCAN_PATCH, side_effect=_scan):
-            with patch(SLEEP_PATCH):
-                with patch(THREAD_PATCH, return_value=MagicMock()):
-                    run_forever(config)
+        with patch(CHROMA_CLIENT_PATCH, return_value=MagicMock()):
+            with patch(SCAN_PATCH, side_effect=_scan):
+                with patch(SLEEP_PATCH):
+                    with patch(THREAD_PATCH, return_value=MagicMock()):
+                        run_forever(config)
 
         assert call_count >= 1
 
@@ -68,42 +70,45 @@ class TestRunForever:
         """Sleep duration must match config.daemon.scan_interval_seconds."""
         call_count = 0
 
-        def _scan(cfg: PhotoMindConfig) -> None:
+        def _scan(cfg: PhotoMindConfig, chroma_client: object) -> None:
             nonlocal call_count
             call_count += 1
             if call_count >= 1:
                 raise KeyboardInterrupt
 
-        with patch(SCAN_PATCH, side_effect=_scan):
-            with patch(SLEEP_PATCH) as mock_sleep:
-                with patch(THREAD_PATCH, return_value=MagicMock()):
-                    run_forever(config)
+        with patch(CHROMA_CLIENT_PATCH, return_value=MagicMock()):
+            with patch(SCAN_PATCH, side_effect=_scan):
+                with patch(SLEEP_PATCH) as mock_sleep:
+                    with patch(THREAD_PATCH, return_value=MagicMock()):
+                        run_forever(config)
 
         for c in mock_sleep.call_args_list:
             assert c[0][0] == config.daemon.scan_interval_seconds
 
     def test_keyboard_interrupt_exits_cleanly(self, config: PhotoMindConfig) -> None:
         """KeyboardInterrupt must cause run_forever to return without raising."""
-        with patch(SCAN_PATCH, side_effect=KeyboardInterrupt):
-            with patch(SLEEP_PATCH):
-                with patch(THREAD_PATCH, return_value=MagicMock()):
-                    run_forever(config)  # must not propagate
+        with patch(CHROMA_CLIENT_PATCH, return_value=MagicMock()):
+            with patch(SCAN_PATCH, side_effect=KeyboardInterrupt):
+                with patch(SLEEP_PATCH):
+                    with patch(THREAD_PATCH, return_value=MagicMock()):
+                        run_forever(config)  # must not propagate
 
     def test_scan_error_does_not_stop_loop(self, config: PhotoMindConfig) -> None:
         """An unexpected scan error must be logged but not crash the loop."""
         call_count = 0
 
-        def _scan(cfg: PhotoMindConfig) -> None:
+        def _scan(cfg: PhotoMindConfig, chroma_client: object) -> None:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
                 raise RuntimeError("transient error")
             raise KeyboardInterrupt
 
-        with patch(SCAN_PATCH, side_effect=_scan):
-            with patch(SLEEP_PATCH):
-                with patch(THREAD_PATCH, return_value=MagicMock()):
-                    run_forever(config)
+        with patch(CHROMA_CLIENT_PATCH, return_value=MagicMock()):
+            with patch(SCAN_PATCH, side_effect=_scan):
+                with patch(SLEEP_PATCH):
+                    with patch(THREAD_PATCH, return_value=MagicMock()):
+                        run_forever(config)
 
         assert call_count == 2
 
@@ -111,16 +116,17 @@ class TestRunForever:
         """Loop continues scanning until interrupted."""
         call_count = 0
 
-        def _scan(cfg: PhotoMindConfig) -> None:
+        def _scan(cfg: PhotoMindConfig, chroma_client: object) -> None:
             nonlocal call_count
             call_count += 1
             if call_count >= 3:
                 raise KeyboardInterrupt
 
-        with patch(SCAN_PATCH, side_effect=_scan):
-            with patch(SLEEP_PATCH):
-                with patch(THREAD_PATCH, return_value=MagicMock()):
-                    run_forever(config)
+        with patch(CHROMA_CLIENT_PATCH, return_value=MagicMock()):
+            with patch(SCAN_PATCH, side_effect=_scan):
+                with patch(SLEEP_PATCH):
+                    with patch(THREAD_PATCH, return_value=MagicMock()):
+                        run_forever(config)
 
         assert call_count == 3
 
@@ -128,25 +134,27 @@ class TestRunForever:
         """run_forever must pass the config object to run_scan unchanged."""
         received: list[PhotoMindConfig] = []
 
-        def _scan(cfg: PhotoMindConfig) -> None:
+        def _scan(cfg: PhotoMindConfig, chroma_client: object) -> None:
             received.append(cfg)
             raise KeyboardInterrupt
 
-        with patch(SCAN_PATCH, side_effect=_scan):
-            with patch(SLEEP_PATCH):
-                with patch(THREAD_PATCH, return_value=MagicMock()):
-                    run_forever(config)
+        with patch(CHROMA_CLIENT_PATCH, return_value=MagicMock()):
+            with patch(SCAN_PATCH, side_effect=_scan):
+                with patch(SLEEP_PATCH):
+                    with patch(THREAD_PATCH, return_value=MagicMock()):
+                        run_forever(config)
 
         assert received[0] is config
 
     def test_cluster_thread_is_started(self, config: PhotoMindConfig) -> None:
         """run_forever must start exactly one background cluster thread."""
-        with patch(SCAN_PATCH, side_effect=KeyboardInterrupt):
-            with patch(SLEEP_PATCH):
-                with patch(THREAD_PATCH) as mock_cls:
-                    mock_thread = MagicMock()
-                    mock_cls.return_value = mock_thread
-                    run_forever(config)
+        with patch(CHROMA_CLIENT_PATCH, return_value=MagicMock()):
+            with patch(SCAN_PATCH, side_effect=KeyboardInterrupt):
+                with patch(SLEEP_PATCH):
+                    with patch(THREAD_PATCH) as mock_cls:
+                        mock_thread = MagicMock()
+                        mock_cls.return_value = mock_thread
+                        run_forever(config)
 
         mock_cls.assert_called_once()
         # Thread must be started
@@ -172,7 +180,7 @@ class TestClusterLoop:
             return ClusterResult(n_faces=5, n_clusters=2, n_noise=1)
 
         with patch(CLUSTER_PATCH, side_effect=fake_cluster) as mock_cluster:
-            _cluster_loop("db.db", "/chroma", 86400, stop_event)
+            _cluster_loop("db.db", MagicMock(), 86400, stop_event)
 
         mock_cluster.assert_called_once()
 
@@ -207,7 +215,7 @@ class TestClusterLoop:
         with patch(CLUSTER_PATCH, side_effect=fake_cluster):
             with patch(TIME_PATCH, side_effect=time_seq):
                 with patch.object(threading.Event, "wait", fake_wait):
-                    _cluster_loop("db.db", "/chroma", 86400, stop_event)
+                    _cluster_loop("db.db", MagicMock(), 86400, stop_event)
 
         assert call_count == 1
 
@@ -228,7 +236,7 @@ class TestClusterLoop:
         # updates on error, so the second iteration will also fire.
         with patch(CLUSTER_PATCH, side_effect=fake_cluster):
             with patch(TIME_PATCH, return_value=0.0):
-                _cluster_loop("db.db", "/chroma", 0, stop_event)
+                _cluster_loop("db.db", MagicMock(), 0, stop_event)
 
         assert call_count == 2
 
@@ -238,24 +246,23 @@ class TestClusterLoop:
         stop_event.set()
 
         with patch(CLUSTER_PATCH) as mock_cluster:
-            _cluster_loop("db.db", "/chroma", 86400, stop_event)
+            _cluster_loop("db.db", MagicMock(), 86400, stop_event)
 
         mock_cluster.assert_not_called()
 
-    def test_clustering_called_with_correct_paths(self) -> None:
-        """run_clustering receives the db_path and chroma_db_path passed to _cluster_loop."""
+    def test_clustering_called_with_correct_args(self) -> None:
+        """run_clustering receives the db_path and chroma_client passed to _cluster_loop."""
         stop_event = threading.Event()
+        mock_client = MagicMock()
 
-        def fake_cluster(
-            db_path: str, chroma_db_path: str, **kwargs: object
-        ) -> ClusterResult:
+        def fake_cluster(*args: object, **kwargs: object) -> ClusterResult:
             stop_event.set()
             return ClusterResult(n_faces=3, n_clusters=1, n_noise=0)
 
         with patch(CLUSTER_PATCH, side_effect=fake_cluster) as mock_cluster:
-            _cluster_loop("/my/db.sqlite", "/my/chroma", 86400, stop_event)
+            _cluster_loop("/my/db.sqlite", mock_client, 86400, stop_event)
 
         mock_cluster.assert_called_once()
         args = mock_cluster.call_args[0]
         assert args[0] == "/my/db.sqlite"
-        assert args[1] == "/my/chroma"
+        assert args[1] is mock_client

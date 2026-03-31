@@ -282,11 +282,38 @@ def embed_text(text: str) -> list[float]:
     return embedding
 
 
+def get_chroma_client(db_path: str | Path) -> chromadb.ClientAPI:
+    """Open a persistent ChromaDB client.
+
+    Returns a single ``PersistentClient`` for *db_path*.  Callers that need
+    multiple collections (e.g. "photos" **and** "faces") must call this once
+    and derive all collections from the returned client — ChromaDB 1.x
+    raises a ``KeyError`` if two ``PersistentClient`` instances are created
+    for the same path within the same process.
+
+    Args:
+        db_path: directory where ChromaDB stores its data on disk.
+
+    Returns:
+        An open ChromaDB client.
+    """
+    import chromadb
+
+    client = chromadb.PersistentClient(path=str(db_path))
+    logger.info("get_chroma_client: db_path=%s", db_path)
+    return client
+
+
 def get_chroma_collection(
     db_path: str | Path,
     collection_name: str = "photos",
 ) -> chromadb.Collection:
     """Create or get a persistent ChromaDB collection.
+
+    Convenience wrapper that opens its own client.  Use only when a single
+    collection is needed in an isolated context (e.g. tests, bridge).
+    For the daemon, prefer :func:`get_chroma_client` so a single client is
+    shared across all collections.
 
     Args:
         db_path: directory where ChromaDB stores its data on disk.
@@ -295,9 +322,7 @@ def get_chroma_collection(
     Returns:
         A chromadb Collection object (created if it did not exist).
     """
-    import chromadb
-
-    client = chromadb.PersistentClient(path=str(db_path))
+    client = get_chroma_client(db_path)
     collection = client.get_or_create_collection(collection_name)
     logger.info(
         "get_chroma_collection: db_path=%s, collection=%s",

@@ -16,7 +16,7 @@ import time
 import uuid
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
@@ -65,7 +65,7 @@ def _make_db(db_path: Path, face_rows: list[tuple[str, str]]) -> None:
 
 
 def _mock_chroma(face_ids: list[str], embeddings: list[list[float]]) -> MagicMock:
-    """Return a mock chromadb module whose PersistentClient returns the given data."""
+    """Return a mock ChromaDB client whose 'faces' collection returns the given data."""
     fake_collection = MagicMock()
     fake_collection.get.return_value = {
         "ids": face_ids,
@@ -73,9 +73,7 @@ def _mock_chroma(face_ids: list[str], embeddings: list[list[float]]) -> MagicMoc
     }
     fake_client = MagicMock()
     fake_client.get_collection.return_value = fake_collection
-    mock_chromadb = MagicMock()
-    mock_chromadb.PersistentClient.return_value = fake_client
-    return mock_chromadb
+    return fake_client
 
 
 def _read_faces(db_path: Path) -> dict[str, str | None]:
@@ -127,11 +125,8 @@ class TestRunClusteringEmpty:
 
         fake_client = MagicMock()
         fake_client.get_collection.side_effect = Exception("does not exist")
-        mock_chromadb = MagicMock()
-        mock_chromadb.PersistentClient.return_value = fake_client
 
-        with patch("photomind.services.cluster.chromadb", mock_chromadb):
-            result = cluster_mod.run_clustering(db_path, tmp_path / "chroma")
+        result = cluster_mod.run_clustering(db_path, fake_client)
 
         assert result.n_faces == 0
         assert result.n_clusters == 0
@@ -142,10 +137,9 @@ class TestRunClusteringEmpty:
         db_path = tmp_path / "test.db"
         _make_db(db_path, [])
 
-        mock_chromadb = _mock_chroma([], [])
+        mock_client = _mock_chroma([], [])
 
-        with patch("photomind.services.cluster.chromadb", mock_chromadb):
-            result = cluster_mod.run_clustering(db_path, tmp_path / "chroma")
+        result = cluster_mod.run_clustering(db_path, mock_client)
 
         assert result.n_faces == 0
         assert result.n_clusters == 0
@@ -160,12 +154,11 @@ class TestRunClusteringEmpty:
         _make_db(db_path, [(face_id, "photo-1")])
 
         emb = [0.1] * 512
-        mock_chromadb = _mock_chroma([face_id], [emb])
+        mock_client = _mock_chroma([face_id], [emb])
 
-        with patch("photomind.services.cluster.chromadb", mock_chromadb):
-            result = cluster_mod.run_clustering(
-                db_path, tmp_path / "chroma", min_cluster_size=2
-            )
+        result = cluster_mod.run_clustering(
+            db_path, mock_client, min_cluster_size=2
+        )
 
         assert result.n_faces == 1
         assert result.n_clusters == 0
@@ -198,12 +191,11 @@ class TestRunClusteringSuccess:
         embeddings = self._make_embeddings(5, center_a) + self._make_embeddings(
             5, center_b
         )
-        mock_chromadb = _mock_chroma(face_ids, embeddings)
+        mock_client = _mock_chroma(face_ids, embeddings)
 
-        with patch("photomind.services.cluster.chromadb", mock_chromadb):
-            result = cluster_mod.run_clustering(
-                db_path, tmp_path / "chroma", min_cluster_size=2
-            )
+        result = cluster_mod.run_clustering(
+            db_path, mock_client, min_cluster_size=2
+        )
 
         assert result.n_faces == 10
         assert result.n_clusters == 2
@@ -222,12 +214,11 @@ class TestRunClusteringSuccess:
         embeddings = self._make_embeddings(3, center_a) + self._make_embeddings(
             3, center_b
         )
-        mock_chromadb = _mock_chroma(face_ids, embeddings)
+        mock_client = _mock_chroma(face_ids, embeddings)
 
-        with patch("photomind.services.cluster.chromadb", mock_chromadb):
-            result = cluster_mod.run_clustering(
-                db_path, tmp_path / "chroma", min_cluster_size=2
-            )
+        result = cluster_mod.run_clustering(
+            db_path, mock_client, min_cluster_size=2
+        )
 
         face_map = _read_faces(db_path)
         clustered = [v for v in face_map.values() if v is not None]
@@ -250,12 +241,11 @@ class TestRunClusteringSuccess:
         emb_b = [0.999, 0.01] + [0.0] * 510  # close to emb_a
         emb_outlier = rng.random(512).tolist()
 
-        mock_chromadb = _mock_chroma(face_ids, [emb_a, emb_b, emb_outlier])
+        mock_client = _mock_chroma(face_ids, [emb_a, emb_b, emb_outlier])
 
-        with patch("photomind.services.cluster.chromadb", mock_chromadb):
-            result = cluster_mod.run_clustering(
-                db_path, tmp_path / "chroma", min_cluster_size=2, min_samples=1
-            )
+        result = cluster_mod.run_clustering(
+            db_path, mock_client, min_cluster_size=2, min_samples=1
+        )
 
         face_map = _read_faces(db_path)
         # face 2 (outlier) should be NULL if it's noise
@@ -276,10 +266,9 @@ class TestRunClusteringSuccess:
         embeddings = self._make_embeddings(2, center_a) + self._make_embeddings(
             2, center_b
         )
-        mock_chromadb = _mock_chroma(face_ids, embeddings)
+        mock_client = _mock_chroma(face_ids, embeddings)
 
-        with patch("photomind.services.cluster.chromadb", mock_chromadb):
-            cluster_mod.run_clustering(db_path, tmp_path / "chroma", min_cluster_size=2)
+        cluster_mod.run_clustering(db_path, mock_client, min_cluster_size=2)
 
         clusters = _read_clusters(db_path)
         # Each cluster has 2 faces from different photos → photo_count=2
@@ -300,14 +289,13 @@ class TestRunClusteringSuccess:
         embeddings = self._make_embeddings(2, center_a) + self._make_embeddings(
             2, center_b
         )
-        mock_chromadb = _mock_chroma(face_ids, embeddings)
+        mock_client = _mock_chroma(face_ids, embeddings)
 
-        with patch("photomind.services.cluster.chromadb", mock_chromadb):
-            cluster_mod.run_clustering(db_path, tmp_path / "chroma", min_cluster_size=2)
-            first_cluster_ids = {c["id"] for c in _read_clusters(db_path)}
+        cluster_mod.run_clustering(db_path, mock_client, min_cluster_size=2)
+        first_cluster_ids = {c["id"] for c in _read_clusters(db_path)}
 
-            cluster_mod.run_clustering(db_path, tmp_path / "chroma", min_cluster_size=2)
-            second_cluster_ids = {c["id"] for c in _read_clusters(db_path)}
+        cluster_mod.run_clustering(db_path, mock_client, min_cluster_size=2)
+        second_cluster_ids = {c["id"] for c in _read_clusters(db_path)}
 
         # New UUIDs assigned on each run
         assert first_cluster_ids.isdisjoint(second_cluster_ids)
@@ -328,11 +316,10 @@ class TestRunClusteringSuccess:
         embeddings = self._make_embeddings(2, center_a) + self._make_embeddings(
             2, center_b
         )
-        mock_chromadb = _mock_chroma(face_ids, embeddings)
+        mock_client = _mock_chroma(face_ids, embeddings)
 
         before = int(time.time())
-        with patch("photomind.services.cluster.chromadb", mock_chromadb):
-            cluster_mod.run_clustering(db_path, tmp_path / "chroma", min_cluster_size=2)
+        cluster_mod.run_clustering(db_path, mock_client, min_cluster_size=2)
         after = int(time.time())
 
         clusters = _read_clusters(db_path)
@@ -345,10 +332,9 @@ class TestClusterResult:
         """ClusterResult has n_faces, n_clusters, n_noise attributes."""
         db_path = tmp_path / "test.db"
         _make_db(db_path, [])
-        mock_chromadb = _mock_chroma([], [])
+        mock_client = _mock_chroma([], [])
 
-        with patch("photomind.services.cluster.chromadb", mock_chromadb):
-            result = cluster_mod.run_clustering(db_path, tmp_path / "chroma")
+        result = cluster_mod.run_clustering(db_path, mock_client)
 
         assert hasattr(result, "n_faces")
         assert hasattr(result, "n_clusters")

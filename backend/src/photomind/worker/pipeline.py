@@ -64,6 +64,7 @@ def process_photo(
     source_path: str,
     db_path: str | Path,
     chroma_collection: chromadb.Collection,
+    face_chroma_collection: chromadb.Collection,
     known_phashes: set[str],
     existing_filenames: set[str],
 ) -> str:
@@ -75,13 +76,14 @@ def process_photo(
     can continue to the next photo.
 
     Args:
-        config:             Project configuration (paths, pipeline tuning).
-        source_remote:      rclone remote name (e.g. "onedrive_karthik").
-        source_path:        Full path to the file on the remote.
-        db_path:            Path to the shared SQLite database.
-        chroma_collection:  Open ChromaDB collection handle (shared per batch).
-        known_phashes:      Set of existing pHash strings for dedup (pre-loaded).
-        existing_filenames: Set of existing final filenames for rename collision.
+        config:               Project configuration (paths, pipeline tuning).
+        source_remote:        rclone remote name (e.g. "onedrive_karthik").
+        source_path:          Full path to the file on the remote.
+        db_path:              Path to the shared SQLite database.
+        chroma_collection:    Open ChromaDB "photos" collection (shared per batch).
+        face_chroma_collection: Open ChromaDB "faces" collection (shared per batch).
+        known_phashes:        Set of existing pHash strings for dedup (pre-loaded).
+        existing_filenames:   Set of existing final filenames for rename collision.
 
     Returns:
         UUID string for the newly created photo record.
@@ -186,7 +188,9 @@ def process_photo(
             tmp_file, det_thresh=config.insightface.det_thresh
         )
         if face_results:
-            face_svc.store_faces(db_path, config.chroma_db_path, photo_id, face_results)
+            face_svc.store_faces(
+                db_path, face_chroma_collection, photo_id, face_results
+            )
         update_photo(db_path, photo_id, face_count=len(face_results))
         logger.debug("[%s] Stage 10: %d face(s) detected", photo_id, len(face_results))
 

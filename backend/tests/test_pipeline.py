@@ -160,6 +160,7 @@ class TestHappyPath:
                 source_path="/Pictures/2024/IMG_001.jpg",
                 db_path=dirs["db"],
                 chroma_collection=chroma_mock,
+                face_chroma_collection=chroma_mock,
                 known_phashes=set(),
                 existing_filenames=set(),
             )
@@ -189,6 +190,7 @@ class TestHappyPath:
                 source_path="/Pictures/2024/IMG_001.jpg",
                 db_path=dirs["db"],
                 chroma_collection=chroma_mock,
+                face_chroma_collection=chroma_mock,
                 known_phashes=set(),
                 existing_filenames=set(),
             )
@@ -219,6 +221,7 @@ class TestHappyPath:
                 source_path="/Pictures/2024/IMG_001.jpg",
                 db_path=dirs["db"],
                 chroma_collection=chroma_mock,
+                face_chroma_collection=chroma_mock,
                 known_phashes=set(),
                 existing_filenames=set(),
             )
@@ -247,6 +250,7 @@ class TestHappyPath:
                 source_path="/Pictures/2024/IMG_001.jpg",
                 db_path=dirs["db"],
                 chroma_collection=chroma_mock,
+                face_chroma_collection=chroma_mock,
                 known_phashes=set(),
                 existing_filenames=set(),
             )
@@ -275,6 +279,7 @@ class TestHappyPath:
                 source_path="/Pictures/2024/IMG_001.jpg",
                 db_path=dirs["db"],
                 chroma_collection=chroma_mock,
+                face_chroma_collection=chroma_mock,
                 known_phashes=set(),
                 existing_filenames=set(),
             )
@@ -302,6 +307,7 @@ class TestHappyPath:
                 source_path="/Pictures/2024/IMG_001.jpg",
                 db_path=dirs["db"],
                 chroma_collection=chroma_mock,
+                face_chroma_collection=chroma_mock,
                 known_phashes=set(),
                 existing_filenames=set(),
             )
@@ -331,6 +337,7 @@ class TestHappyPath:
                 source_path="/Pictures/2024/IMG_001.jpg",
                 db_path=dirs["db"],
                 chroma_collection=chroma_mock,
+                face_chroma_collection=chroma_mock,
                 known_phashes=set(),
                 existing_filenames=set(),
             )
@@ -373,6 +380,7 @@ class TestMemeBailOut:
                 source_path="/Pictures/2024/IMG-20240101-WA0001.jpg",
                 db_path=dirs["db"],
                 chroma_collection=chroma_mock,
+                face_chroma_collection=chroma_mock,
                 known_phashes=set(),
                 existing_filenames=set(),
             )
@@ -407,6 +415,7 @@ class TestMemeBailOut:
                 source_path="/Pictures/2024/IMG-20240101-WA0001.jpg",
                 db_path=dirs["db"],
                 chroma_collection=chroma_mock,
+                face_chroma_collection=chroma_mock,
                 known_phashes=set(),
                 existing_filenames=set(),
             )
@@ -445,6 +454,7 @@ class TestDedupBailOut:
                 source_path="/Pictures/2024/IMG_001.jpg",
                 db_path=dirs["db"],
                 chroma_collection=chroma_mock,
+                face_chroma_collection=chroma_mock,
                 known_phashes={phash},
                 existing_filenames=set(),
             )
@@ -478,6 +488,7 @@ class TestDedupBailOut:
                 source_path="/Pictures/2024/IMG_001.jpg",
                 db_path=dirs["db"],
                 chroma_collection=chroma_mock,
+                face_chroma_collection=chroma_mock,
                 known_phashes={phash},
                 existing_filenames=set(),
             )
@@ -505,6 +516,7 @@ class TestErrorHandling:
                 source_path="/Pictures/2024/IMG_001.jpg",
                 db_path=dirs["db"],
                 chroma_collection=chroma_mock,
+                face_chroma_collection=chroma_mock,
                 known_phashes=set(),
                 existing_filenames=set(),
             )
@@ -529,6 +541,7 @@ class TestErrorHandling:
                 source_path="/Pictures/2024/IMG_001.jpg",
                 db_path=dirs["db"],
                 chroma_collection=chroma_mock,
+                face_chroma_collection=chroma_mock,
                 known_phashes=set(),
                 existing_filenames=set(),
             )
@@ -556,6 +569,7 @@ class TestErrorHandling:
                 source_path="/Pictures/2024/IMG_001.jpg",
                 db_path=dirs["db"],
                 chroma_collection=chroma_mock,
+                face_chroma_collection=chroma_mock,
                 known_phashes=set(),
                 existing_filenames=set(),
             )
@@ -591,6 +605,7 @@ class TestReturnValue:
                 source_path="/Pictures/2024/IMG_001.jpg",
                 db_path=dirs["db"],
                 chroma_collection=chroma_mock,
+                face_chroma_collection=chroma_mock,
                 known_phashes=set(),
                 existing_filenames=set(),
             )

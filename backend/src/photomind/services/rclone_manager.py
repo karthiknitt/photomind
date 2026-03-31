@@ -179,8 +179,7 @@ def get_oauth_auth_url(provider: OAuthProvider) -> str:
 
     if not found:
         raise RcloneManagerError(
-            f"No OAuth URL found within {_OAUTH_URL_TIMEOUT}s "
-            f"for provider {provider!r}"
+            f"No OAuth URL found within {_OAUTH_URL_TIMEOUT}s for provider {provider!r}"
         )
 
     url = found[0]

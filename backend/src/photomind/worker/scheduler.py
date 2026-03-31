@@ -17,7 +17,10 @@ import logging
 import threading
 import time
 
+import chromadb
+
 from photomind.config import PhotoMindConfig
+from photomind.services.clip import get_chroma_client
 from photomind.services.cluster import run_clustering
 from photomind.worker.daemon import run_scan
 
@@ -26,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 def _cluster_loop(
     db_path: str,
-    chroma_db_path: str,
+    chroma_client: chromadb.ClientAPI,
     cluster_interval: int,
     stop_event: threading.Event,
 ) -> None:
@@ -38,7 +41,7 @@ def _cluster_loop(
 
     Args:
         db_path:          Path to the shared SQLite database.
-        chroma_db_path:   Path to the ChromaDB directory.
+        chroma_client:    Shared ChromaDB client (passed from run_forever).
         cluster_interval: Seconds between clustering runs.
         stop_event:       Set by the main thread to request a clean shutdown.
     """
@@ -47,7 +50,7 @@ def _cluster_loop(
     while not stop_event.is_set():
         if time.time() - last_cluster_time >= cluster_interval:
             try:
-                result = run_clustering(db_path, chroma_db_path)
+                result = run_clustering(db_path, chroma_client)
                 last_cluster_time = time.time()
                 logger.info(
                     "cluster: done — %d cluster(s), %d face(s), %d noise",
@@ -86,13 +89,17 @@ def run_forever(config: PhotoMindConfig) -> None:
         cluster_interval,
     )
 
+    # One PersistentClient for the lifetime of this process — ChromaDB 1.x
+    # raises KeyError if a second PersistentClient is created for the same path.
+    chroma_client: chromadb.ClientAPI = get_chroma_client(config.chroma_db_path)
+
     # Start clustering in a background thread so it runs independently of scan
     stop_event = threading.Event()
     cluster_thread = threading.Thread(
         target=_cluster_loop,
         args=(
             config.database_path,
-            config.chroma_db_path,
+            chroma_client,
             cluster_interval,
             stop_event,
         ),
@@ -106,7 +113,7 @@ def run_forever(config: PhotoMindConfig) -> None:
         while True:
             # ── Photo scan ───────────────────────────────────────────────────
             try:
-                run_scan(config)
+                run_scan(config, chroma_client)
             except Exception as exc:  # noqa: BLE001
                 logger.error(
                     "Scan error (will retry after sleep): %s", exc, exc_info=True

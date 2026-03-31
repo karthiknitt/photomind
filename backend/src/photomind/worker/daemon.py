@@ -21,8 +21,10 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import chromadb
+
 from photomind.config import PhotoMindConfig
-from photomind.services import clip, local_scanner, rclone
+from photomind.services import local_scanner, rclone
 from photomind.services.photos_db import (
     get_existing_filenames,
     get_phashes,
@@ -55,7 +57,10 @@ def _is_image(filename: str) -> bool:
     return Path(filename).suffix.lower() in _IMAGE_EXTENSIONS
 
 
-def run_scan(config: PhotoMindConfig) -> None:
+def run_scan(
+    config: PhotoMindConfig,
+    chroma_client: chromadb.ClientAPI,
+) -> None:
     """Run one complete scan cycle across all configured sources.
 
     Downloads nothing permanently — each file is downloaded to tmp_path,
@@ -63,14 +68,20 @@ def run_scan(config: PhotoMindConfig) -> None:
     the pipeline. Pre-loads DB state once per scan (not per file).
 
     Args:
-        config: Loaded PhotoMindConfig with sources, paths, and pipeline tuning.
+        config:       Loaded PhotoMindConfig with sources, paths, and pipeline tuning.
+        chroma_client: Shared ChromaDB client (opened once by the caller so that
+                       only one PersistentClient exists per process).
     """
     db_path = config.database_path
 
     logger.info("Scan started — %d source(s) configured", len(config.sources))
 
-    # Open ChromaDB once for the whole scan
-    chroma_collection = clip.get_chroma_collection(config.chroma_db_path)
+    # Derive both collections from the shared client — never create a second
+    # PersistentClient for the same path (ChromaDB 1.x raises KeyError).
+    chroma_collection = chroma_client.get_or_create_collection("photos")
+    face_chroma_collection = chroma_client.get_or_create_collection(
+        "faces", metadata={"hnsw:space": "cosine"}
+    )
 
     # Pre-load DB state once — O(1) lookups per file
     known_source_paths = get_processed_source_paths(db_path)
@@ -124,6 +135,7 @@ def run_scan(config: PhotoMindConfig) -> None:
                     source_path=lf.path,
                     db_path=db_path,
                     chroma_collection=chroma_collection,
+                    face_chroma_collection=face_chroma_collection,
                     known_phashes=known_phashes,
                     existing_filenames=existing_filenames,
                 )
@@ -193,6 +205,7 @@ def run_scan(config: PhotoMindConfig) -> None:
                     source_path=full_path(rf.path),
                     db_path=db_path,
                     chroma_collection=chroma_collection,
+                    face_chroma_collection=face_chroma_collection,
                     known_phashes=known_phashes,
                     existing_filenames=existing_filenames,
                 )

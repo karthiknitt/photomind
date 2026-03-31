@@ -58,9 +58,12 @@ def config(tmp_path: Path, db_path: Path) -> PhotoMindConfig:
 
 @pytest.fixture()
 def chroma_mock() -> MagicMock:
+    """Mock ChromaDB client; get_or_create_collection returns a mock collection."""
+    client = MagicMock()
     coll = MagicMock()
     coll.upsert = MagicMock()
-    return coll
+    client.get_or_create_collection.return_value = coll
+    return client
 
 
 def _remote_file(path: str, name: str, *, is_dir: bool = False) -> MagicMock:
@@ -72,7 +75,6 @@ def _remote_file(path: str, name: str, *, is_dir: bool = False) -> MagicMock:
 
 RCLONE_PATCH = "photomind.worker.daemon.rclone"
 PIPELINE_PATCH = "photomind.worker.daemon.process_photo"
-CLIP_PATCH = "photomind.worker.daemon.clip"
 
 
 # ---------------------------------------------------------------------------
@@ -135,9 +137,8 @@ class TestRunScanNewFiles:
         with (
             patch(f"{RCLONE_PATCH}.list_files", return_value=files),
             patch(PIPELINE_PATCH, return_value="uuid-1") as mock_process,
-            patch(f"{CLIP_PATCH}.get_chroma_collection", return_value=chroma_mock),
         ):
-            run_scan(config)
+            run_scan(config, chroma_mock)
 
         assert mock_process.call_count == 2
 
@@ -152,9 +153,8 @@ class TestRunScanNewFiles:
         with (
             patch(f"{RCLONE_PATCH}.list_files", return_value=files),
             patch(PIPELINE_PATCH, return_value="uuid-1") as mock_process,
-            patch(f"{CLIP_PATCH}.get_chroma_collection", return_value=chroma_mock),
         ):
-            run_scan(config)
+            run_scan(config, chroma_mock)
 
         _, kwargs = mock_process.call_args
         assert kwargs["source_remote"] == "onedrive_karthik"
@@ -170,9 +170,8 @@ class TestRunScanNewFiles:
         with (
             patch(f"{RCLONE_PATCH}.list_files", return_value=files),
             patch(PIPELINE_PATCH, return_value="uuid-1") as mock_process,
-            patch(f"{CLIP_PATCH}.get_chroma_collection", return_value=chroma_mock),
         ):
-            run_scan(config)
+            run_scan(config, chroma_mock)
 
         _, kwargs = mock_process.call_args
         assert kwargs["source_path"] == "/Pictures/2024/IMG_001.jpg"
@@ -191,9 +190,8 @@ class TestRunScanNewFiles:
         with (
             patch(f"{RCLONE_PATCH}.list_files", return_value=files),
             patch(PIPELINE_PATCH, return_value="uuid-1") as mock_process,
-            patch(f"{CLIP_PATCH}.get_chroma_collection", return_value=chroma_mock),
         ):
-            run_scan(config)
+            run_scan(config, chroma_mock)
 
         assert mock_process.call_count == 1
 
@@ -212,9 +210,8 @@ class TestRunScanNewFiles:
         with (
             patch(f"{RCLONE_PATCH}.list_files", return_value=files),
             patch(PIPELINE_PATCH, return_value="uuid-1") as mock_process,
-            patch(f"{CLIP_PATCH}.get_chroma_collection", return_value=chroma_mock),
         ):
-            run_scan(config)
+            run_scan(config, chroma_mock)
 
         assert mock_process.call_count == 1
 
@@ -250,9 +247,8 @@ class TestRunScanSkipsKnown:
         with (
             patch(f"{RCLONE_PATCH}.list_files", return_value=files),
             patch(PIPELINE_PATCH, return_value="uuid-1") as mock_process,
-            patch(f"{CLIP_PATCH}.get_chroma_collection", return_value=chroma_mock),
         ):
-            run_scan(config)
+            run_scan(config, chroma_mock)
 
         mock_process.assert_not_called()
 
@@ -284,9 +280,8 @@ class TestRunScanSkipsKnown:
         with (
             patch(f"{RCLONE_PATCH}.list_files", return_value=files),
             patch(PIPELINE_PATCH, return_value="uuid-2") as mock_process,
-            patch(f"{CLIP_PATCH}.get_chroma_collection", return_value=chroma_mock),
         ):
-            run_scan(config)
+            run_scan(config, chroma_mock)
 
         assert mock_process.call_count == 1
         _, kwargs = mock_process.call_args
@@ -308,9 +303,8 @@ class TestRunScanEmptySource:
         with (
             patch(f"{RCLONE_PATCH}.list_files", return_value=[]),
             patch(PIPELINE_PATCH, return_value="uuid-1") as mock_process,
-            patch(f"{CLIP_PATCH}.get_chroma_collection", return_value=chroma_mock),
         ):
-            run_scan(config)
+            run_scan(config, chroma_mock)
 
         mock_process.assert_not_called()
 
@@ -351,9 +345,8 @@ class TestRunScanErrorHandling:
         with (
             patch(f"{RCLONE_PATCH}.list_files", side_effect=_list_side_effect),
             patch(PIPELINE_PATCH, return_value="uuid-1") as mock_process,
-            patch(f"{CLIP_PATCH}.get_chroma_collection", return_value=chroma_mock),
         ):
-            run_scan(two_source_config)  # must not raise
+            run_scan(two_source_config, chroma_mock)  # must not raise
 
         # Good source should still be processed
         assert mock_process.call_count == 1
@@ -370,6 +363,5 @@ class TestRunScanErrorHandling:
         with (
             patch(f"{RCLONE_PATCH}.list_files", side_effect=RcloneError("timeout")),
             patch(PIPELINE_PATCH, return_value="uuid-1"),
-            patch(f"{CLIP_PATCH}.get_chroma_collection", return_value=chroma_mock),
         ):
-            run_scan(config)  # should return without raising
+            run_scan(config, chroma_mock)  # should return without raising

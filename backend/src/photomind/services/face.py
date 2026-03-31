@@ -208,7 +208,7 @@ def detect(
 
 def store_faces(
     db_path: str | Path,
-    chroma_db_path: str | Path,
+    face_collection: chromadb.Collection,
     photo_id: str,
     faces: list[FaceDetection],
 ) -> None:
@@ -218,10 +218,10 @@ def store_faces(
     always NULL at insert time — it will be populated by a later clustering job.
 
     Args:
-        db_path:       Path to the SQLite database file.
-        chroma_db_path: Directory where ChromaDB stores its data on disk.
-        photo_id:      UUID of the parent photo (stored in ``faces.photo_id``).
-        faces:         Detected faces to store (from :func:`detect`).
+        db_path:         Path to the SQLite database file.
+        face_collection: Open ChromaDB "faces" collection (shared by caller).
+        photo_id:        UUID of the parent photo (stored in ``faces.photo_id``).
+        faces:           Detected faces to store (from :func:`detect`).
     """
     if not faces:
         return
@@ -251,11 +251,7 @@ def store_faces(
     )
 
     # --- ChromaDB ---------------------------------------------------------------
-    chroma_client = chromadb.PersistentClient(path=str(chroma_db_path))
-    collection = chroma_client.get_or_create_collection(
-        "faces", metadata={"hnsw:space": "cosine"}
-    )
-    collection.upsert(
+    face_collection.upsert(
         ids=[face.face_id for face in faces],
         embeddings=[face.embedding for face in faces],
     )
