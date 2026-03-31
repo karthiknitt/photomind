@@ -1,29 +1,34 @@
 """
-Tests for worker/scheduler.py.
+Tests for worker/scheduler.py — threaded architecture.
 
-The scheduler wraps run_scan() in a periodic loop:
-  - Calls run_scan() immediately on start
-  - Runs run_clustering() when face_cluster_interval_seconds has elapsed
-  - Sleeps scan_interval_seconds between scans
-  - Stops cleanly on KeyboardInterrupt
+run_forever():
+  - Runs run_scan() in a loop, exits on KeyboardInterrupt
+  - Starts a background daemon thread for face clustering
+  - Scan errors are logged but the loop continues
 
-Tests use mock.patch to intercept run_scan, run_clustering, and time.sleep
-so no real I/O or waiting occurs.
+_cluster_loop():
+  - Triggers clustering immediately on first pass (last_cluster_time=0.0)
+  - Does not re-run clustering before the interval elapses
+  - Catches clustering errors and retries next interval
+  - Exits cleanly when stop_event is set
 """
 
 from __future__ import annotations
 
-from unittest.mock import patch
+import threading
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from photomind.config import DaemonConfig, PhotoMindConfig
-from photomind.worker.scheduler import run_forever
+from photomind.services.cluster import ClusterResult
+from photomind.worker.scheduler import _cluster_loop, run_forever
 
 SCAN_PATCH = "photomind.worker.scheduler.run_scan"
 SLEEP_PATCH = "photomind.worker.scheduler.time.sleep"
 CLUSTER_PATCH = "photomind.worker.scheduler.run_clustering"
 TIME_PATCH = "photomind.worker.scheduler.time.time"
+THREAD_PATCH = "photomind.worker.scheduler.threading.Thread"
 
 
 @pytest.fixture()
@@ -37,7 +42,7 @@ def config() -> PhotoMindConfig:
 
 
 # ---------------------------------------------------------------------------
-# run_forever — basic behaviour
+# run_forever — scan loop behaviour
 # ---------------------------------------------------------------------------
 
 
@@ -50,11 +55,12 @@ class TestRunForever:
             nonlocal call_count
             call_count += 1
             if call_count >= 1:
-                raise KeyboardInterrupt  # stop after first scan
+                raise KeyboardInterrupt
 
         with patch(SCAN_PATCH, side_effect=_scan):
             with patch(SLEEP_PATCH):
-                run_forever(config)
+                with patch(THREAD_PATCH, return_value=MagicMock()):
+                    run_forever(config)
 
         assert call_count >= 1
 
@@ -70,20 +76,21 @@ class TestRunForever:
 
         with patch(SCAN_PATCH, side_effect=_scan):
             with patch(SLEEP_PATCH) as mock_sleep:
-                run_forever(config)
+                with patch(THREAD_PATCH, return_value=MagicMock()):
+                    run_forever(config)
 
-        # If sleep was called, it must use the correct interval
-        for call_args in mock_sleep.call_args_list:
-            assert call_args[0][0] == config.daemon.scan_interval_seconds
+        for c in mock_sleep.call_args_list:
+            assert c[0][0] == config.daemon.scan_interval_seconds
 
     def test_keyboard_interrupt_exits_cleanly(self, config: PhotoMindConfig) -> None:
         """KeyboardInterrupt must cause run_forever to return without raising."""
         with patch(SCAN_PATCH, side_effect=KeyboardInterrupt):
             with patch(SLEEP_PATCH):
-                run_forever(config)  # must not propagate KeyboardInterrupt
+                with patch(THREAD_PATCH, return_value=MagicMock()):
+                    run_forever(config)  # must not propagate
 
     def test_scan_error_does_not_stop_loop(self, config: PhotoMindConfig) -> None:
-        """An unexpected error in run_scan must be logged but not crash the loop."""
+        """An unexpected scan error must be logged but not crash the loop."""
         call_count = 0
 
         def _scan(cfg: PhotoMindConfig) -> None:
@@ -91,13 +98,14 @@ class TestRunForever:
             call_count += 1
             if call_count == 1:
                 raise RuntimeError("transient error")
-            raise KeyboardInterrupt  # stop on second call
+            raise KeyboardInterrupt
 
         with patch(SCAN_PATCH, side_effect=_scan):
             with patch(SLEEP_PATCH):
-                run_forever(config)  # must not raise RuntimeError
+                with patch(THREAD_PATCH, return_value=MagicMock()):
+                    run_forever(config)
 
-        assert call_count == 2  # first (error) + second (KeyboardInterrupt)
+        assert call_count == 2
 
     def test_multiple_scans_before_stop(self, config: PhotoMindConfig) -> None:
         """Loop continues scanning until interrupted."""
@@ -111,7 +119,8 @@ class TestRunForever:
 
         with patch(SCAN_PATCH, side_effect=_scan):
             with patch(SLEEP_PATCH):
-                run_forever(config)
+                with patch(THREAD_PATCH, return_value=MagicMock()):
+                    run_forever(config)
 
         assert call_count == 3
 
@@ -125,92 +134,128 @@ class TestRunForever:
 
         with patch(SCAN_PATCH, side_effect=_scan):
             with patch(SLEEP_PATCH):
-                run_forever(config)
+                with patch(THREAD_PATCH, return_value=MagicMock()):
+                    run_forever(config)
 
         assert received[0] is config
 
+    def test_cluster_thread_is_started(self, config: PhotoMindConfig) -> None:
+        """run_forever must start exactly one background cluster thread."""
+        with patch(SCAN_PATCH, side_effect=KeyboardInterrupt):
+            with patch(SLEEP_PATCH):
+                with patch(THREAD_PATCH) as mock_cls:
+                    mock_thread = MagicMock()
+                    mock_cls.return_value = mock_thread
+                    run_forever(config)
+
+        mock_cls.assert_called_once()
+        # Thread must be started
+        mock_thread.start.assert_called_once()
+        # Thread kwargs must pass stop_event and correct args
+        kwargs = mock_cls.call_args.kwargs
+        assert kwargs.get("daemon") is True
+        assert kwargs.get("name") == "face-cluster"
+
 
 # ---------------------------------------------------------------------------
-# Clustering integration
+# _cluster_loop — clustering thread behaviour
 # ---------------------------------------------------------------------------
 
 
-class TestClusteringIntegration:
-    def test_clustering_called_when_interval_elapsed(
-        self, config: PhotoMindConfig
-    ) -> None:
-        """run_clustering is called once the face_cluster_interval has elapsed.
+class TestClusterLoop:
+    def test_clustering_runs_on_first_pass(self) -> None:
+        """Clustering fires immediately because last_cluster_time starts at 0.0."""
+        stop_event = threading.Event()
 
-        Scan completes normally; sleep raises KeyboardInterrupt to stop the loop.
-        time.time() sequence: [startup, check_after_scan, update_after_cluster].
-        Extra values cover stdlib logging's internal time.time() calls.
-        """
-        startup = 1_000_000.0
-        elapsed = startup + config.daemon.face_cluster_interval_seconds + 1
-        after_update = elapsed + 1  # for last_cluster_time = time.time()
+        def fake_cluster(*args: object, **kwargs: object) -> ClusterResult:
+            stop_event.set()  # exit loop after first successful run
+            return ClusterResult(n_faces=5, n_clusters=2, n_noise=1)
 
-        # Extra fallback values for logging module's internal time.time() usage
-        time_calls = iter([startup, elapsed, after_update, *([after_update] * 20)])
-
-        from photomind.services.cluster import ClusterResult
-
-        with (
-            patch(SCAN_PATCH),  # scan succeeds (no exception)
-            patch(SLEEP_PATCH, side_effect=KeyboardInterrupt),  # stop during sleep
-            patch(TIME_PATCH, side_effect=time_calls),
-            patch(CLUSTER_PATCH, return_value=ClusterResult(10, 2, 1)) as mock_cluster,
-        ):
-            run_forever(config)
+        with patch(CLUSTER_PATCH, side_effect=fake_cluster) as mock_cluster:
+            _cluster_loop("db.db", "/chroma", 86400, stop_event)
 
         mock_cluster.assert_called_once()
 
-    def test_clustering_not_called_before_interval(
-        self, config: PhotoMindConfig
-    ) -> None:
-        """run_clustering is NOT called when the interval has not yet elapsed.
+    def test_clustering_not_recalled_before_interval(self) -> None:
+        """After a successful run, clustering does not fire again before the interval."""
+        stop_event = threading.Event()
+        call_count = 0
 
-        Only 60 seconds pass after startup — well under face_cluster_interval (86400).
-        """
-        startup = 1_000_000.0
-        not_elapsed = startup + 60.0  # well under 86400s
+        # After first cluster, time advances only 60s — well under 86400s interval
+        base_time = 1_000_000.0
+        time_seq = iter(
+            [
+                base_time,  # first check: time() - 0.0 ≥ 86400 → True
+                base_time,  # last_cluster_time = time()
+                base_time + 60,  # second check: 60s elapsed < 86400 → False
+            ]
+        )
 
-        time_calls = iter([startup, not_elapsed, *([not_elapsed] * 20)])
+        def fake_cluster(*args: object, **kwargs: object) -> ClusterResult:
+            nonlocal call_count
+            call_count += 1
+            return ClusterResult(n_faces=5, n_clusters=2, n_noise=1)
 
-        with (
-            patch(SCAN_PATCH),  # scan succeeds
-            patch(SLEEP_PATCH, side_effect=KeyboardInterrupt),
-            patch(TIME_PATCH, side_effect=time_calls),
-            patch(CLUSTER_PATCH) as mock_cluster,
-        ):
-            run_forever(config)
+        original_wait = threading.Event.wait
+
+        def fake_wait(self: threading.Event, timeout: float | None = None) -> bool:
+            # First wait: keep looping; second wait: stop
+            if call_count >= 1:
+                stop_event.set()
+            return original_wait(self, timeout=0)
+
+        with patch(CLUSTER_PATCH, side_effect=fake_cluster):
+            with patch(TIME_PATCH, side_effect=time_seq):
+                with patch.object(threading.Event, "wait", fake_wait):
+                    _cluster_loop("db.db", "/chroma", 86400, stop_event)
+
+        assert call_count == 1
+
+    def test_cluster_error_does_not_crash_loop(self) -> None:
+        """An error in run_clustering is caught; the loop retries next interval."""
+        stop_event = threading.Event()
+        call_count = 0
+
+        def fake_cluster(*args: object, **kwargs: object) -> ClusterResult:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("chroma offline")
+            stop_event.set()
+            return ClusterResult(n_faces=5, n_clusters=2, n_noise=1)
+
+        # interval=0 so the elapsed check is always True; last_cluster_time never
+        # updates on error, so the second iteration will also fire.
+        with patch(CLUSTER_PATCH, side_effect=fake_cluster):
+            with patch(TIME_PATCH, return_value=0.0):
+                _cluster_loop("db.db", "/chroma", 0, stop_event)
+
+        assert call_count == 2
+
+    def test_loop_exits_immediately_when_stop_event_set(self) -> None:
+        """If stop_event is already set, loop body never executes."""
+        stop_event = threading.Event()
+        stop_event.set()
+
+        with patch(CLUSTER_PATCH) as mock_cluster:
+            _cluster_loop("db.db", "/chroma", 86400, stop_event)
 
         mock_cluster.assert_not_called()
 
-    def test_cluster_error_does_not_crash_loop(self, config: PhotoMindConfig) -> None:
-        """An error in run_clustering is logged but the loop continues.
+    def test_clustering_called_with_correct_paths(self) -> None:
+        """run_clustering receives the db_path and chroma_db_path passed to _cluster_loop."""
+        stop_event = threading.Event()
 
-        Scan 1 completes; clustering errors; sleep completes; scan 2 raises
-        KeyboardInterrupt to exit.
-        """
-        startup = 1_000_000.0
-        elapsed = startup + config.daemon.face_cluster_interval_seconds + 1
+        def fake_cluster(
+            db_path: str, chroma_db_path: str, **kwargs: object
+        ) -> ClusterResult:
+            stop_event.set()
+            return ClusterResult(n_faces=3, n_clusters=1, n_noise=0)
 
-        # Extra fallback values for stdlib logging's internal time.time() calls
-        time_calls = iter([startup, elapsed, *([elapsed] * 20)])
-        scan_count = 0
+        with patch(CLUSTER_PATCH, side_effect=fake_cluster) as mock_cluster:
+            _cluster_loop("/my/db.sqlite", "/my/chroma", 86400, stop_event)
 
-        def _scan(cfg: PhotoMindConfig) -> None:
-            nonlocal scan_count
-            scan_count += 1
-            if scan_count >= 2:
-                raise KeyboardInterrupt  # stop on second scan
-
-        with (
-            patch(SCAN_PATCH, side_effect=_scan),
-            patch(SLEEP_PATCH),  # sleep succeeds so loop continues
-            patch(TIME_PATCH, side_effect=time_calls),
-            patch(CLUSTER_PATCH, side_effect=RuntimeError("chroma offline")),
-        ):
-            run_forever(config)  # must not raise
-
-        assert scan_count == 2
+        mock_cluster.assert_called_once()
+        args = mock_cluster.call_args[0]
+        assert args[0] == "/my/db.sqlite"
+        assert args[1] == "/my/chroma"
