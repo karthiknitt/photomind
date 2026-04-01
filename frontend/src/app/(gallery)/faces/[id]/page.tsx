@@ -4,6 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useRef, useState } from "react";
+import type { FaceRow } from "@/components/face-crop";
+import { FaceCrop } from "@/components/face-crop";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -22,18 +24,6 @@ interface PhotoRow {
   country: string | null;
   width: number | null;
   height: number | null;
-}
-
-interface FaceRow {
-  id: string;
-  photoId: string;
-  bboxX: number | null;
-  bboxY: number | null;
-  bboxW: number | null;
-  bboxH: number | null;
-  detScore: number | null;
-  photoWidth: number | null;
-  photoHeight: number | null;
 }
 
 interface Pagination {
@@ -216,73 +206,6 @@ function PhotoCard({ photo }: { photo: PhotoRow }) {
         {locationLabel(photo) && <p className="truncate">{locationLabel(photo)}</p>}
       </div>
     </div>
-  );
-}
-
-// ─── Face crop tile ───────────────────────────────────────────────────────────
-// Renders a face bbox cropped from its photo thumbnail using CSS translate.
-// Thumbnail is max 400px longest side; we scale bbox coords accordingly.
-
-const CROP_PX = 88; // display size of each face crop tile
-
-interface FaceCropProps {
-  face: FaceRow;
-  selected: boolean;
-  onToggle: () => void;
-}
-
-function FaceCrop({ face, selected, onToggle }: FaceCropProps) {
-  const photoW = face.photoWidth ?? 400;
-  const photoH = face.photoHeight ?? 400;
-  const scale = Math.min(1, Math.min(400 / photoW, 400 / photoH));
-  const thumbW = photoW * scale;
-  const thumbH = photoH * scale;
-  const bx = (face.bboxX ?? 0) * scale;
-  const by = (face.bboxY ?? 0) * scale;
-  const bw = Math.max(1, (face.bboxW ?? 80) * scale);
-  const bh = Math.max(1, (face.bboxH ?? 80) * scale);
-  // zoom so the face fills the crop tile
-  const zoom = CROP_PX / Math.max(bw, bh);
-
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      className={`relative overflow-hidden rounded-lg border-2 transition-all ${
-        selected
-          ? "border-blue-500 ring-2 ring-blue-400 ring-offset-1"
-          : "border-transparent hover:border-zinc-400"
-      }`}
-      style={{ width: CROP_PX, height: CROP_PX }}
-      title="Click to select"
-    >
-      {/* biome-ignore lint/performance/noImgElement: face crop requires CSS sub-pixel translation not compatible with next/image wrapper */}
-      <img
-        src={`/api/thumbnails/${face.photoId}`}
-        alt=""
-        style={{
-          position: "absolute",
-          width: thumbW * zoom,
-          height: thumbH * zoom,
-          left: -(bx * zoom),
-          top: -(by * zoom),
-          pointerEvents: "none",
-        }}
-      />
-      {selected && (
-        <div className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500">
-          <svg
-            className="h-3 w-3 text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            aria-hidden="true"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-          </svg>
-        </div>
-      )}
-    </button>
   );
 }
 

@@ -15,7 +15,9 @@ import os
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel
 
 from photomind.services.clip import embed_text, get_chroma_collection, query_similar
 
@@ -46,6 +48,70 @@ async def search(
         }
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+class CentroidSimilarRequest(BaseModel):
+    embedding_ids: list[str]
+    exclude_ids: list[str] = []
+    n_results: int = 200
+
+
+@app.post("/faces/centroid-similar")
+async def centroid_similar(body: CentroidSimilarRequest) -> dict[str, Any]:
+    """Find faces similar to the centroid of the given embedding IDs.
+
+    1. Fetch embeddings from ChromaDB "faces" collection.
+    2. L2-normalise each, compute mean, L2-normalise centroid.
+    3. Query ChromaDB with the centroid vector.
+    4. Filter out exclude_ids and return (id, distance) pairs.
+    """
+    if not body.embedding_ids:
+        raise HTTPException(status_code=400, detail="embedding_ids must not be empty")
+
+    try:
+        collection = get_chroma_collection(CHROMA_DB_PATH, "faces")
+        fetch = collection.get(ids=body.embedding_ids, include=["embeddings"])
+        raw = fetch.get("embeddings")
+
+        if not raw:
+            raise HTTPException(
+                status_code=400,
+                detail="No embeddings found for the given embedding_ids",
+            )
+
+        # Stack → L2-normalise each row → mean → L2-normalise centroid
+        X = np.array(raw, dtype=np.float32)
+        norms = np.linalg.norm(X, axis=1, keepdims=True)
+        norms = np.where(norms == 0, 1.0, norms)
+        X = X / norms
+        centroid = X.mean(axis=0)
+        c_norm = np.linalg.norm(centroid)
+        if c_norm > 0:
+            centroid = centroid / c_norm
+
+        result = collection.query(
+            query_embeddings=[centroid.tolist()],
+            n_results=body.n_results,
+            include=["distances"],
+        )
+
+        ids: list[str] = result["ids"][0]
+        distances: list[float] = result["distances"][0]
+        exclude_set = set(body.exclude_ids)
+
+        results = [
+            {"id": fid, "distance": dist}
+            for fid, dist in zip(ids, distances, strict=True)
+            if fid not in exclude_set
+        ]
+
+        return {"results": results}
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("[POST /faces/centroid-similar] error: %s", exc)
+        raise HTTPException(status_code=500, detail="Internal server error") from exc
 
 
 @app.get("/health")

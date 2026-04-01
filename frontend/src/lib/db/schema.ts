@@ -1,4 +1,4 @@
-import { integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // ─── photos ──────────────────────────────────────────────────────────────────
 
@@ -132,6 +132,23 @@ export const importJobs = sqliteTable("import_jobs", {
   finishedAt: integer("finished_at"),
 });
 
+// ─── face_cluster_pairs ───────────────────────────────────────────────────────
+// Records confirmed same/different decisions between clusters.
+// No FK on cluster IDs — source cluster is deleted after merge, but we keep
+// the pair record so we don't re-suggest the same pair in future sessions.
+
+export const faceClusterPairs = sqliteTable(
+  "face_cluster_pairs",
+  {
+    id: text("id").primaryKey(),
+    clusterIdA: text("cluster_id_a").notNull(), // smaller UUID (normalised order)
+    clusterIdB: text("cluster_id_b").notNull(), // larger UUID (normalised order)
+    isSame: integer("is_same", { mode: "boolean" }).notNull(),
+    createdAt: integer("created_at").notNull(),
+  },
+  (table) => [uniqueIndex("uniq_cluster_pair").on(table.clusterIdA, table.clusterIdB)]
+);
+
 // ─── Type exports ─────────────────────────────────────────────────────────────
 
 export type Photo = typeof photos.$inferSelect;
@@ -150,3 +167,5 @@ export type Source = typeof sources.$inferSelect;
 export type NewSource = typeof sources.$inferInsert;
 export type ImportJob = typeof importJobs.$inferSelect;
 export type NewImportJob = typeof importJobs.$inferInsert;
+export type FaceClusterPair = typeof faceClusterPairs.$inferSelect;
+export type NewFaceClusterPair = typeof faceClusterPairs.$inferInsert;

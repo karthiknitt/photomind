@@ -4,6 +4,23 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+// ─── Identify banner ──────────────────────────────────────────────────────────
+
+function IdentifyBanner({ unlabeledCount }: { unlabeledCount: number }) {
+  if (unlabeledCount === 0) return null;
+  return (
+    <Link
+      href="/faces/identify"
+      className="mb-6 flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/40 dark:hover:bg-blue-950/60"
+    >
+      <span className="font-medium text-blue-800 dark:text-blue-300">
+        {unlabeledCount} cluster{unlabeledCount === 1 ? "" : "s"} not yet identified
+      </span>
+      <span className="text-blue-600 dark:text-blue-400">Start identifying →</span>
+    </Link>
+  );
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ClusterRow {
@@ -190,6 +207,15 @@ export default function FacesPage() {
   const [data, setData] = useState<ClustersResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [unlabeledCount, setUnlabeledCount] = useState(0);
+
+  useEffect(() => {
+    // Fetch unlabeled count for the identify banner
+    fetch("/api/faces/clusters?label=null")
+      .then((r) => r.json())
+      .then((d: ClustersResponse) => setUnlabeledCount(d.total))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -207,6 +233,14 @@ export default function FacesPage() {
   const handleLabelSaved = useCallback((id: string, newLabel: string | null) => {
     setData((prev) => {
       if (!prev) return prev;
+      const cluster = prev.clusters.find((c) => c.id === id);
+      const wasUnlabeled = cluster?.label == null;
+      const isNowLabeled = newLabel != null;
+      if (wasUnlabeled && isNowLabeled) {
+        setUnlabeledCount((n) => Math.max(0, n - 1));
+      } else if (!wasUnlabeled && !isNowLabeled) {
+        setUnlabeledCount((n) => n + 1);
+      }
       return {
         ...prev,
         clusters: prev.clusters.map((c) => (c.id === id ? { ...c, label: newLabel } : c)),
@@ -216,6 +250,8 @@ export default function FacesPage() {
 
   return (
     <div>
+      <IdentifyBanner unlabeledCount={unlabeledCount} />
+
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">Faces</h1>
