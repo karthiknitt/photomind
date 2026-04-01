@@ -102,27 +102,37 @@ else
     ok "Created $ENV_FILE from template"
 fi
 
-# ── 8. Summary ─────────────────────────────────────────────────────────────────
+# ── 8. Initial deploy (build + migrate + start all services) ──────────────────
+step "Running deploy.sh (build → migrate → start services)"
+# deploy.sh calls `sudo systemctl restart` internally — must run as karthik
+# but with sudo access already granted via this script's root context
+sudo -u karthik bash "$REPO_ROOT/scripts/deploy.sh" \
+  || { warn "deploy.sh reported a failure — check logs above"; }
+
+# ── 9. Smoke test ─────────────────────────────────────────────────────────────
+step "Smoke test"
+SMOKE="$REPO_ROOT/scripts/smoke-test.sh"
+if [[ -x "$SMOKE" ]]; then
+    sudo -u karthik bash "$SMOKE" "https://${TAILSCALE_HOST}:${PHOTOMIND_HTTPS_PORT}" \
+      || warn "Smoke test had failures — check service logs"
+else
+    warn "smoke-test.sh not found — skipping"
+fi
+
+# ── 10. Summary ────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}╔══════════════════════════════════════════════════╗${RESET}"
-echo -e "${BOLD}║        Setup complete — next steps               ║${RESET}"
+echo -e "${BOLD}║            First-time setup COMPLETE             ║${RESET}"
 echo -e "${BOLD}╚══════════════════════════════════════════════════╝${RESET}"
 echo ""
-echo -e "  ${YELLOW}Still required before starting services:${RESET}"
-echo ""
-echo -e "  1. Create ${BOLD}config.yaml${RESET} (Python daemon config):"
-echo -e "     nano $REPO_ROOT/config.yaml"
-echo -e "     (See docs/documentation.md → Configuration for full schema)"
-echo ""
-echo -e "  2. ${BOLD}$ENV_FILE${RESET} is already filled with sane defaults."
-echo -e "     Edit only if you need non-default paths:"
-echo -e "     nano $ENV_FILE"
-echo ""
-echo -e "  3. Run the initial deploy:"
-echo -e "     cd $REPO_ROOT && bash scripts/deploy.sh"
-echo ""
-echo -e "  4. Verify everything works:"
-echo -e "     bash scripts/smoke-test.sh https://$TAILSCALE_HOST:$PHOTOMIND_HTTPS_PORT"
-echo ""
 echo -e "  ${GREEN}Access URL: https://$TAILSCALE_HOST:$PHOTOMIND_HTTPS_PORT${RESET}"
+echo ""
+echo -e "  ${YELLOW}If the daemon is not running, create config.yaml first:${RESET}"
+echo -e "     nano $DATA_DIR/config.yaml"
+echo -e "     sudo systemctl restart photomind-daemon"
+echo ""
+echo -e "  Logs:"
+echo -e "     journalctl -u photomind-frontend -f"
+echo -e "     journalctl -u photomind-daemon   -f"
+echo -e "     journalctl -u photomind-bridge   -f"
 echo ""
