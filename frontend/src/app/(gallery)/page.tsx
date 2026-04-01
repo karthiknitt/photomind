@@ -148,48 +148,34 @@ function PhotoDetailDialog({
         if (!isOpen) onClose();
       }}
     >
-      <DialogContent className="max-w-5xl w-full max-h-[92vh] overflow-y-auto p-0">
-        <div className="flex flex-col md:flex-row h-full">
-          {/* Left: large thumbnail */}
-          <div className="relative flex-1 min-h-[50vw] md:min-h-0 md:h-[80vh] bg-zinc-900 flex items-center justify-center">
+      <DialogContent className="!max-w-2xl w-full overflow-y-auto p-0">
+        <div className="flex flex-col">
+          {/* Top: thumbnail */}
+          <div className="bg-zinc-900 flex items-center justify-center p-6 min-h-[300px]">
             {loading && (
-              <div className="flex items-center justify-center p-12 text-zinc-500">
-                <span className="text-sm">Loading…</span>
-              </div>
+              <div className="text-zinc-500 text-sm">Loading…</div>
             )}
             {!loading && photoId && !imgError && (
-              <Image
+              // biome-ignore lint/performance/noImgElement: thumbnail already optimised (max 400px); next/image fill requires a fixed-height parent
+              <img
                 src={`/api/thumbnails/${photoId}`}
                 alt={photo?.filenameFinal ?? photoId}
-                fill
-                sizes="(max-width: 768px) 100vw, 50vw"
-                className="object-contain"
+                style={{ maxWidth: "100%", maxHeight: "60vh" }}
                 onError={() => setImgError(true)}
               />
             )}
             {!loading && imgError && (
-              <div className="flex flex-col items-center justify-center gap-2 text-zinc-500 p-12">
-                <svg
-                  className="h-12 w-12"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  aria-hidden="true"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 3l18 18"
-                  />
+              <div className="flex flex-col items-center gap-2 text-zinc-500">
+                <svg className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 3l18 18" />
                 </svg>
                 <span className="text-sm">Preview unavailable</span>
               </div>
             )}
           </div>
 
-          {/* Right: metadata panel */}
-          <div className="w-full md:w-80 flex flex-col shrink-0 border-t md:border-t-0 md:border-l border-zinc-200 dark:border-zinc-800">
+          {/* Bottom: metadata panel */}
+          <div className="flex flex-col border-t border-zinc-200 dark:border-zinc-800">
             <DialogHeader className="px-5 py-4 border-b border-zinc-200 dark:border-zinc-800">
               <DialogTitle className="text-sm font-semibold text-zinc-900 dark:text-zinc-50 truncate">
                 {photo?.filenameFinal ?? (loading ? "Loading…" : "—")}
