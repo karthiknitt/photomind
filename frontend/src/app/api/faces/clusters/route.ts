@@ -1,4 +1,4 @@
-import { and, count, desc, gt, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, count, desc, gt, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/client";
 import { faceClusters } from "@/lib/db/schema";
@@ -26,6 +26,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // label=null  → only unlabeled, label=set → only labeled, omit → all
     const labelFilter = searchParams.get("label");
     const limit = Number(searchParams.get("limit")) || undefined;
+    // exclude=id1,id2,... → skip specific cluster IDs (used by the identify wizard)
+    const excludeParam = searchParams.get("exclude");
+    const excludeIds = excludeParam ? excludeParam.split(",").filter(Boolean) : [];
 
     // Build label condition
     const labelCondition =
@@ -35,9 +38,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           ? isNotNull(faceClusters.label)
           : undefined;
 
-    const whereClause = labelCondition
-      ? and(gt(faceClusters.photoCount, 0), labelCondition)
-      : gt(faceClusters.photoCount, 0);
+    const conditions = [
+      gt(faceClusters.photoCount, 0),
+      labelCondition,
+      excludeIds.length > 0 ? notInArray(faceClusters.id, excludeIds) : undefined,
+    ].filter((c) => c !== undefined);
+
+    const whereClause = conditions.length === 1 ? conditions[0] : and(...conditions);
 
     // Get all clusters with photoCount > 0, ordered by photoCount desc.
     // For each cluster, find one representative face's photoId via a raw subquery.

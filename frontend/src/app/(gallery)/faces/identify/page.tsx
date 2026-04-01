@@ -135,8 +135,9 @@ export default function IdentifyPage() {
   const [suggestingAction, setSuggestingAction] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const skippedIds = useRef<Set<string>>(new Set());
 
-  // Load next unlabeled cluster
+  // Load next unlabeled cluster, skipping any IDs in skippedIds
   const loadNext = useCallback(
     async (knownPeople: ClusterRow[]) => {
       setPhase({ type: "loading" });
@@ -144,11 +145,15 @@ export default function IdentifyPage() {
       setNameInput("");
 
       try {
-        const res = await fetch("/api/faces/clusters?label=null&limit=1&orderBy=photoCount");
+        const excludeParam =
+          skippedIds.current.size > 0
+            ? `&exclude=${[...skippedIds.current].join(",")}`
+            : "";
+        const res = await fetch(`/api/faces/clusters?label=null&limit=1${excludeParam}`);
         if (!res.ok) throw new Error(`API error ${res.status}`);
         const data = (await res.json()) as { clusters: ClusterRow[]; total: number };
 
-        setProgress((p) => ({ ...p, total: data.total + p.done }));
+        setProgress((p) => ({ ...p, total: data.total + skippedIds.current.size + p.done }));
 
         if (data.clusters.length === 0) {
           setPhase({ type: "done", labeled: progress.done });
@@ -483,7 +488,10 @@ export default function IdentifyPage() {
           <div className="mt-4 flex justify-end">
             <button
               type="button"
-              onClick={() => loadNext(phase.knownPeople)}
+              onClick={() => {
+                skippedIds.current.add(phase.cluster.id);
+                loadNext(phase.knownPeople);
+              }}
               className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
             >
               Skip →
