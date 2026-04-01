@@ -13,7 +13,7 @@ Originals are never modified. The processed library is written to a dedicated On
 | Layer | Technology |
 |---|---|
 | Frontend runtime | Bun |
-| Frontend framework | Next.js 15 (App Router) |
+| Frontend framework | Next.js 16.1.7 (App Router) |
 | UI components | ShadCN + Tailwind v4 |
 | TS lint/format | Biome |
 | TS testing | Vitest (via bun) |
@@ -91,10 +91,12 @@ cd frontend && bun run db:studio
 - Action log — SQLite audit trail of every pipeline action
 
 **Frontend (Next.js)**
-- Gallery — paginated photo grid (48/page), click-to-open detail lightbox
-- Photo detail — full metadata panel: date, location, camera, dimensions, faces
+- Gallery — paginated photo grid (48/page), click-to-open detail lightbox with metadata + face list
+- Photo detail — full metadata panel: date, location, camera, dimensions, GPS, faces with names
 - Search — hybrid text + CLIP semantic search with mode selector
-- Faces — cluster browser with representative thumbnails, inline name labeling
+- Faces — cluster browser with representative thumbnails, inline name labeling, per-cluster photo grid
+- Face identify wizard — active-learning wizard: shows unlabeled cluster faces + similar cluster suggestions; label, merge, or skip; tracks skipped clusters across the session
+- Face split — split a cluster by selecting a subset of faces into a new cluster
 - Dashboard — pipeline stats (by status), health bar, live activity feed
 - Logs — paginated audit log with action-type filter
 - Settings — system config display, CLIP bridge health check, source list

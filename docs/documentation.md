@@ -140,6 +140,17 @@
 | detail | TEXT | JSON or free-form string |
 | timestamp | INTEGER | Unix timestamp |
 
+### face_cluster_pairs
+| Column | Type | Notes |
+|---|---|---|
+| id | TEXT PK | UUID |
+| cluster_id_a | TEXT | smaller UUID (normalised pair order) |
+| cluster_id_b | TEXT | larger UUID |
+| is_same | INTEGER | 0 or 1 — confirmed same/different person decision |
+| created_at | INTEGER | Unix timestamp |
+
+Unique index on `(cluster_id_a, cluster_id_b)`. No FK on cluster IDs — source cluster is deleted after merge, but pair record is kept so the wizard never re-suggests the same pair.
+
 ### sources
 | Column | Type | Notes |
 |---|---|---|
@@ -201,7 +212,13 @@ Text mode: LIKE on `city`, `country`, `filenameFinal`. Semantic mode: calls CLIP
 ### GET /api/faces/clusters
 All face clusters with representative photo thumbnail.
 
-**Response:** `{ clusters: [{ id, label, photoCount, representativePhotoId }] }`
+**Query params:**
+- `label=null` — only unlabeled clusters
+- `label=set` — only labeled clusters
+- `limit` — max results
+- `exclude=id1,id2,...` — skip specific cluster IDs (used by identify wizard to skip clusters)
+
+**Response:** `{ clusters: [{ id, label, photoCount, createdAt, representativePhotoId }], total: N }`
 
 ---
 
@@ -222,6 +239,51 @@ Paginated photos in a cluster.
 **Query params:** `page`, `limit` (default 24)
 
 **Response:** `{ photos: [...], pagination: {...} }`
+
+---
+
+### GET /api/faces/clusters/[id]/faces
+All faces in a cluster with their photo dimensions (used by FaceCrop for bbox rendering).
+
+**Response:** `{ faces: [{ id, photoId, bboxX, bboxY, bboxW, bboxH, detScore, photoWidth, photoHeight }], total: N }`
+
+---
+
+### GET /api/faces/clusters/[id]/similar
+Suggests other clusters that may be the same person, using CLIP bridge centroid similarity.
+
+**Response:** `{ clusters: [{ id, avgSimilarity, photoCount, representativeFaceId }], bridgeUnavailable?: true }`
+
+Filters out: already-decided pairs (from `face_cluster_pairs`), clusters with distance > 0.65. Returns up to 5 suggestions ordered by similarity.
+
+---
+
+### POST /api/faces/clusters/[id]/merge
+Merge source cluster into target cluster. Moves all faces, recalculates `photo_count`, deletes source cluster, records `isSame=true` pair.
+
+**Body:** `{ "sourceClusterId": "uuid" }`
+
+**Response:** `{ cluster: { id, label, photoCount, createdAt } }` (the surviving target cluster)
+
+---
+
+### POST /api/faces/clusters/[id]/split
+Split selected faces out of a cluster into a new unlabeled cluster.
+
+**Body:** `{ "faceIds": ["uuid", ...] }`
+
+**Response:** `{ newCluster: { id, label, photoCount, createdAt } }`
+
+---
+
+### POST /api/faces/pairs
+Record a confirmed same/different decision between two clusters. Prevents re-suggesting the pair.
+
+**Body:** `{ "clusterIdA": "uuid", "clusterIdB": "uuid", "isSame": false }`
+
+**Response:** `{ pair: { id, clusterIdA, clusterIdB, isSame, createdAt } }`
+
+Normalises pair order (smaller UUID first) and upserts to enforce uniqueness.
 
 ---
 
@@ -302,10 +364,11 @@ Started by `photomind-bridge` systemd service via uvicorn.
 
 | Page | Route | Description |
 |---|---|---|
-| `page.tsx` | `/` | Paginated photo grid (48/page). Click opens `PhotoDetailDialog` lightbox with full metadata + faces panel. |
+| `page.tsx` | `/` | Paginated photo grid (48/page). Click opens `PhotoDetailDialog` lightbox with full metadata + faces panel. Uses plain `<img>` (not Next.js Image fill) to avoid fixed-height parent constraint. |
 | `search/page.tsx` | `/search` | 400ms debounced search, mode selector (text/semantic/hybrid), result cards with score. |
 | `faces/page.tsx` | `/faces` | Cluster grid. Inline label editing (click pencil → input → save/cancel). |
-| `faces/[id]/page.tsx` | `/faces/:id` | Per-cluster photo grid with back navigation. |
+| `faces/[id]/page.tsx` | `/faces/:id` | Per-cluster photo grid + face tile grid with back navigation. Face tiles use `FaceCrop` component. Split-cluster button: select faces → POST /split → redirects to new cluster. |
+| `faces/identify/page.tsx` | `/faces/identify` | Active-learning wizard. Three phases: (1) load unlabeled cluster + known labeled clusters, (2) show faces grid + similar cluster suggestions (via /similar), ask user to label/merge/skip, (3) completion screen. Tracks skipped IDs in `useRef<Set<string>>` passed as `?exclude=` to avoid re-surfacing skipped clusters. |
 | `dashboard/page.tsx` | `/dashboard` | 9 stat cards, stacked pipeline health bar, activity feed. Auto-refresh every 30s. |
 | `logs/page.tsx` | `/logs` | Paginated audit log (50/page), action-type filter dropdown, auto-refresh toggle (10s). |
 | `settings/page.tsx` | `/settings` | System config table, CLIP bridge health dot (green/red + latency), sources table. |
@@ -314,8 +377,15 @@ Started by `photomind-bridge` systemd service via uvicorn.
 
 | File | Description |
 |---|---|
-| `schema.ts` | Drizzle ORM schema — all 6 tables (photos, faces, face_clusters, photo_tags, events, action_log, sources) |
+| `schema.ts` | Drizzle ORM schema — all 7 tables (photos, faces, face_clusters, face_cluster_pairs, photo_tags, events, action_log, sources) |
 | `client.ts` | bun:sqlite connection with WAL + foreign_keys=ON |
+
+### Shared UI Components (`frontend/src/components/`)
+
+| File | Description |
+|---|---|
+| `face-crop.tsx` | `FaceCrop` — renders a face bbox cropped from its photo thumbnail using CSS `background-image` + `background-size` + `background-position`. Supports interactive mode (selectable tile with blue checkmark) and display-only mode. The background-image approach avoids `overflow:hidden` cross-browser issues on `<button>` elements. |
+| `pagination.tsx` | Reusable pagination controls. |
 
 ---
 
@@ -595,3 +665,44 @@ scripts/review-pr.sh <PR> sync          # Pull latest main
 - Drizzle ORM subquery interpolation returns `null` for complex subqueries in some versions — use `db.run(sql\`...\`)` raw SQL when Drizzle's query builder doesn't produce correct SQL for correlated subqueries
 - `deploy/nginx/photomind.conf` uses Tailscale TLS certs at `/etc/ssl/photomind/` — issued via `sudo tailscale cert <hostname>`; Tailscale handles automatic renewal
 - `scripts/deploy.sh --no-daemon` flag allows frontend-only deploys without restarting the Python pipeline daemon (useful during active scans)
+
+---
+
+### 2026-04-01 — Active-Learning Face Identification Wizard + UI Bug Fixes (PRs #25–26)
+
+**What was built:**
+- **face_cluster_pairs schema** — new `face_cluster_pairs` table (unique on `(cluster_id_a, cluster_id_b)`) to persist confirmed same/different decisions between clusters. Pair order normalised (smaller UUID first) so `(A, B)` and `(B, A)` are the same pair.
+- **FaceCrop shared component** (`components/face-crop.tsx`) — renders a face bbox cropped from its photo thumbnail using CSS `background-image`. Supports interactive mode (selectable tile, blue checkmark) and display-only mode. Uses `background-size`/`background-position` math to zoom+center the face region within the tile.
+- **Split cluster UI** (`/faces/[id]`) — select a subset of face tiles, POST to `/split`, redirects to the new cluster page.
+- **New API routes:**
+  - `GET /api/faces/clusters/[id]/faces` — faces with photo dimensions for bbox rendering
+  - `GET /api/faces/clusters/[id]/similar` — CLIP centroid similarity via bridge; filters already-decided pairs; returns up to 5 suggestions
+  - `POST /api/faces/clusters/[id]/merge` — moves all faces, recalculates `photo_count`, deletes source, records `isSame=true` pair
+  - `POST /api/faces/clusters/[id]/split` — extracts selected face IDs into a new cluster
+  - `POST /api/faces/pairs` — upsert a confirmed pair decision
+  - `GET /api/faces/clusters` extended with `?label=`, `?limit=`, `?exclude=id1,id2,...` query params
+- **Face identify wizard** (`/faces/identify`) — active-learning loop: fetch unlabeled cluster → show face tiles + similar cluster suggestions → user labels, merges, or skips → fetch next. Skipped cluster IDs tracked in `useRef<Set<string>>` and passed as `?exclude=` so the API never re-surfaces them.
+
+**Key files changed:**
+- `frontend/src/lib/db/schema.ts` — added `faceClusterPairs` table with unique index
+- `frontend/src/components/face-crop.tsx` — background-image technique (fix for overflow:hidden cross-browser issue on `<button>`)
+- `frontend/src/app/api/faces/clusters/route.ts` — added `label`, `limit`, `exclude` query params; `notInArray` filter
+- `frontend/src/app/api/faces/clusters/[id]/faces/route.ts` — new route; joins faces → photos for dimensions
+- `frontend/src/app/api/faces/clusters/[id]/similar/route.ts` — new route; queries CLIP bridge, filters decided pairs
+- `frontend/src/app/api/faces/clusters/[id]/merge/route.ts` — new route; merge + pair record in a transaction
+- `frontend/src/app/api/faces/clusters/[id]/split/route.ts` — new route; creates new cluster with selected faces
+- `frontend/src/app/api/faces/pairs/route.ts` — new route; upsert pair decision
+- `frontend/src/app/(gallery)/faces/identify/page.tsx` — identify wizard with 3-phase state machine
+- `frontend/src/app/(gallery)/faces/[id]/page.tsx` — added face tile grid + split-cluster interaction
+
+**Bug fixes this session:**
+- **Blank face crop tiles** — `overflow:hidden` on `<button>` elements has cross-browser quirks for absolutely-positioned children. Fixed by switching from `<img position:absolute>` to CSS `background-image` on the button itself.
+- **Gallery modal image too small** — ShadCN `DialogContent` ships with `sm:max-w-sm` (384px) in its default className, overriding `max-w-5xl`. Fixed with Tailwind `!max-w-2xl` (`!important`) and switched to stacked layout. Replaced Next.js `Image fill` (requires a fixed-height parent) with plain `<img style="maxHeight:60vh">`.
+- **Skip button no-op** — `loadNext` always fetched the same top-ranked unlabeled cluster because it had no memory of skipped clusters. Fixed by tracking skipped IDs in `useRef<Set<string>>` and appending `?exclude=` to the API call.
+- **Biome CI failure** — formatter wanted ternary operator on one line in `identify/page.tsx` and SVG attributes wrapped in `page.tsx`. Fixed by running `bunx biome format --write`.
+
+**Patterns established:**
+- `useRef<Set<string>>` (not `useState`) for tracking skipped/seen IDs in wizards — avoids re-renders on every skip while still persisting across the session
+- CSS `background-image` + `background-size` + `background-position` is the reliable way to show a clipped/zoomed region of an image inside a `<button>` — `overflow:hidden` on buttons is broken in some browsers for absolutely-positioned children
+- ShadCN/Base-UI `DialogContent` default styles include `sm:max-w-sm` — always use the Tailwind `!` prefix to force a wider max-width override
+- Always run `bunx biome format --write` before committing; Biome's `ci` check is stricter than `check` and will fail on line-length/wrap differences that the editor tolerates
