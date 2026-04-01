@@ -146,9 +146,7 @@ export default function IdentifyPage() {
 
       try {
         const excludeParam =
-          skippedIds.current.size > 0
-            ? `&exclude=${[...skippedIds.current].join(",")}`
-            : "";
+          skippedIds.current.size > 0 ? `&exclude=${[...skippedIds.current].join(",")}` : "";
         const res = await fetch(`/api/faces/clusters?label=null&limit=1${excludeParam}`);
         if (!res.ok) throw new Error(`API error ${res.status}`);
         const data = (await res.json()) as { clusters: ClusterRow[]; total: number };

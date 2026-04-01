@@ -152,9 +152,7 @@ function PhotoDetailDialog({
         <div className="flex flex-col">
           {/* Top: thumbnail */}
           <div className="bg-zinc-900 flex items-center justify-center p-6 min-h-[300px]">
-            {loading && (
-              <div className="text-zinc-500 text-sm">Loading…</div>
-            )}
+            {loading && <div className="text-zinc-500 text-sm">Loading…</div>}
             {!loading && photoId && !imgError && (
               // biome-ignore lint/performance/noImgElement: thumbnail already optimised (max 400px); next/image fill requires a fixed-height parent
               <img
@@ -166,8 +164,19 @@ function PhotoDetailDialog({
             )}
             {!loading && imgError && (
               <div className="flex flex-col items-center gap-2 text-zinc-500">
-                <svg className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 3l18 18" />
+                <svg
+                  className="h-12 w-12"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 3l18 18"
+                  />
                 </svg>
                 <span className="text-sm">Preview unavailable</span>
               </div>
