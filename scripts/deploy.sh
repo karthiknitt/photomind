@@ -58,6 +58,13 @@ cd "$BACKEND_DIR"
 uv sync
 ok "uv sync done"
 
+step "Syncing systemd service files..."
+for svc in photomind-frontend photomind-daemon photomind-bridge; do
+  sudo cp "$REPO_DIR/deploy/${svc}.service" "/etc/systemd/system/${svc}.service"
+done
+sudo systemctl daemon-reload
+ok "service files synced + daemon-reload done"
+
 step "Restarting services..."
 sudo systemctl restart photomind-frontend
 ok "photomind-frontend restarted"
@@ -85,9 +92,9 @@ else
 fi
 
 if curl -sf "http://localhost:8765/health" >/dev/null 2>&1; then
-  ok "CLIP bridge healthy (port 8765)"
+  ok "Python bridge healthy (port 8765)"
 else
-  fail "CLIP bridge not responding — semantic search degraded, text search still works"
+  fail "Python bridge not responding — semantic search + face similarity degraded, text search still works"
 fi
 
 echo ""

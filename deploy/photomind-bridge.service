@@ -1,5 +1,5 @@
 [Unit]
-Description=PhotoMind CLIP HTTP bridge (text→embedding search)
+Description=PhotoMind Python bridge (CLIP text search + face centroid similarity)
 Documentation=https://github.com/karthiknitt/photomind
 After=network-online.target
 Wants=network-online.target
@@ -12,6 +12,7 @@ User=karthik
 WorkingDirectory=/home/karthik/projects/PhotoMind/backend
 
 # FastAPI bridge on localhost:8765 — Next.js reads via CLIP_BRIDGE_URL
+# Endpoints: /search (CLIP text→embedding), /faces/centroid-similar (face ID wizard)
 ExecStart=/home/karthik/.local/bin/uv run python -m uvicorn photomind.bridge.main:app \
     --host 127.0.0.1 \
     --port 8765 \
