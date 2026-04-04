@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -53,6 +54,15 @@ interface ImportJob {
 interface ImportJobsResponse {
   jobs: ImportJob[];
 }
+
+// ─── Upload Types ─────────────────────────────────────────────────────────────
+
+interface UploadFile {
+  file: File;
+  relPath: string;
+}
+
+type UploadState = "idle" | "uploading" | "done" | "error";
 
 // ─── Tree utilities (module-scope, no state deps) ────────────────────────────
 
@@ -456,6 +466,220 @@ function RecentImports({ jobs, loading }: RecentImportsProps) {
   );
 }
 
+// ─── Upload Dropzone ──────────────────────────────────────────────────────────
+
+interface UploadDropzoneProps {
+  onJobStarted: () => void;
+}
+
+function UploadDropzone({ onJobStarted }: UploadDropzoneProps) {
+  const [files, setFiles] = useState<UploadFile[]>([]);
+  const [label, setLabel] = useState("");
+  const [uploadState, setUploadState] = useState<UploadState>("idle");
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
+  const xhrRef = useRef<XMLHttpRequest | null>(null);
+
+  useEffect(() => {
+    return () => {
+      xhrRef.current?.abort();
+    };
+  }, []);
+
+  function collectFiles(fileList: FileList): UploadFile[] {
+    return Array.from(fileList).map((f) => ({
+      file: f,
+      relPath: f.webkitRelativePath || f.name,
+    }));
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (e.target.files) setFiles(collectFiles(e.target.files));
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (e.dataTransfer.files.length > 0) {
+      setFiles(collectFiles(e.dataTransfer.files));
+    }
+  }
+
+  const totalBytes = files.reduce((sum, f) => sum + f.file.size, 0);
+
+  function formatBytes(bytes: number): string {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  }
+
+  async function handleUpload() {
+    if (files.length === 0) return;
+    setUploadState("uploading");
+    setUploadProgress(0);
+    setErrorMsg(null);
+
+    const fd = new FormData();
+    for (const { file, relPath } of files) {
+      fd.append("files", new File([file], relPath, { type: file.type }));
+    }
+    if (label.trim()) fd.append("label", label.trim());
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhrRef.current = xhr;
+        xhr.open("POST", "/api/upload");
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            setUploadProgress(Math.round((e.loaded / e.total) * 100));
+          }
+        };
+        xhr.onload = () => {
+          if (xhr.status === 201) {
+            resolve();
+            return;
+          }
+          let msg = `HTTP ${xhr.status}`;
+          try {
+            msg = (JSON.parse(xhr.responseText) as { error?: string }).error ?? msg;
+          } catch {
+            // ignore non-JSON error body
+          }
+          reject(new Error(msg));
+        };
+        xhr.onerror = () => reject(new Error("Network error"));
+        xhr.send(fd);
+      });
+
+      xhrRef.current = null;
+      setUploadState("done");
+      setFiles([]);
+      setLabel("");
+      setUploadProgress(0);
+      onJobStarted();
+    } catch (err) {
+      setUploadState("error");
+      setErrorMsg(err instanceof Error ? err.message : "Upload failed");
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <section
+        aria-label="File drop zone"
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragOver(true);
+        }}
+        onDragLeave={() => setIsDragOver(false)}
+        onDrop={handleDrop}
+        className={`flex min-h-40 flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed transition-colors ${
+          isDragOver
+            ? "border-blue-400 bg-blue-50 dark:border-blue-600 dark:bg-blue-950/20"
+            : "border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/50"
+        }`}
+      >
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          Drag &amp; drop photos or a folder here
+        </p>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+            Browse Files
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => folderInputRef.current?.click()}>
+            Browse Folder
+          </Button>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="image/*"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+        <input
+          ref={folderInputRef}
+          type="file"
+          // @ts-expect-error webkitdirectory is non-standard but widely supported
+          webkitdirectory=""
+          multiple
+          className="hidden"
+          onChange={handleFileChange}
+        />
+      </section>
+
+      {files.length > 0 && (
+        <p className="text-sm text-zinc-700 dark:text-zinc-300">
+          <span className="font-medium">
+            {files.length} file{files.length !== 1 ? "s" : ""}
+          </span>{" "}
+          selected <span className="text-zinc-400">({formatBytes(totalBytes)})</span>
+        </p>
+      )}
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <div className="flex-1 space-y-1">
+          <label
+            htmlFor="upload-label"
+            className="text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            Label <span className="font-normal text-zinc-400 dark:text-zinc-500">(optional)</span>
+          </label>
+          <input
+            id="upload-label"
+            type="text"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="e.g. Summer Trip 2024"
+            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 outline-none transition-colors focus:border-zinc-400 focus:ring-2 focus:ring-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder-zinc-500 dark:focus:border-zinc-500 dark:focus:ring-zinc-800"
+          />
+        </div>
+        <Button
+          onClick={() => void handleUpload()}
+          disabled={files.length === 0 || uploadState === "uploading"}
+          size="lg"
+          className="shrink-0"
+        >
+          {uploadState === "uploading" ? "Uploading…" : "Upload & Import"}
+        </Button>
+      </div>
+
+      <div aria-live="polite">
+        {uploadState === "uploading" && (
+          <div className="space-y-1">
+            <div className="h-2 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+              <motion.div
+                className="h-full bg-blue-500"
+                initial={{ width: 0 }}
+                animate={{ width: `${uploadProgress}%` }}
+                transition={{ ease: "easeOut", duration: 0.3 }}
+              />
+            </div>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Uploading… {uploadProgress}%</p>
+          </div>
+        )}
+
+        {uploadState === "done" && (
+          <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700 dark:border-green-800 dark:bg-green-950/30 dark:text-green-400">
+            Upload complete — processing started. See progress below.
+          </div>
+        )}
+        {uploadState === "error" && errorMsg && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-400">
+            {errorMsg}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ImportPage() {
@@ -484,15 +708,12 @@ export default function ImportPage() {
     }
   }, []);
 
-  // Initial load
   useEffect(() => {
     void fetchJobs();
   }, [fetchJobs]);
 
-  // Polling: start when there are running jobs, stop when all done
   useEffect(() => {
     const running = hasRunningJob(jobs);
-
     if (running && pollingRef.current === null) {
       pollingRef.current = setInterval(() => {
         void fetchJobs();
@@ -501,7 +722,6 @@ export default function ImportPage() {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
     }
-
     return () => {
       if (pollingRef.current !== null) {
         clearInterval(pollingRef.current);
@@ -514,24 +734,18 @@ export default function ImportPage() {
     if (!selectedPath) return;
     setSubmitting(true);
     setSubmitError(null);
-
     try {
       const res = await fetch("/api/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ localPath: selectedPath, label: label.trim() || null }),
       });
-
       if (!res.ok) {
         const errJson = (await res.json()) as { error?: string };
         throw new Error(errJson.error ?? `HTTP ${res.status}`);
       }
-
-      // Clear form
       setSelectedPath(null);
       setLabel("");
-
-      // Refresh jobs
       await fetchJobs();
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Failed to start import");
@@ -548,99 +762,103 @@ export default function ImportPage() {
 
   return (
     <div className="space-y-8">
-      {/* ── Header ── */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
           Import Photos
         </h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Browse local folders (USB drives, external HDDs, Android MTP) and import into PhotoMind.
+          Browse server folders (USB / NAS / rclone mounts) or upload from your computer.
         </p>
       </div>
 
-      {/* ── Folder Browser ── */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            Browse Folder
-          </h2>
-          <Button variant="outline" size="sm" onClick={handleRefreshBrowser}>
-            <RefreshCw className="h-3.5 w-3.5" />
-            Refresh
-          </Button>
-        </div>
+      <Tabs defaultValue="server">
+        <TabsList className="mb-4">
+          <TabsTrigger value="server">Browse Server</TabsTrigger>
+          <TabsTrigger value="upload">Upload from Computer</TabsTrigger>
+        </TabsList>
 
-        <Card>
-          <CardContent className="p-0">
-            {/* Breadcrumb */}
-            {selectedPath && (
-              <div className="border-b border-zinc-100 px-3 py-2 dark:border-zinc-800">
-                <Breadcrumb path={selectedPath} />
+        <TabsContent value="server" className="space-y-4">
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Browse Folder
+              </h2>
+              <Button variant="outline" size="sm" onClick={handleRefreshBrowser}>
+                <RefreshCw className="h-3.5 w-3.5" />
+                Refresh
+              </Button>
+            </div>
+            <Card>
+              <CardContent className="p-0">
+                {selectedPath && (
+                  <div className="border-b border-zinc-100 px-3 py-2 dark:border-zinc-800">
+                    <Breadcrumb path={selectedPath} />
+                  </div>
+                )}
+                <div className="max-h-72 overflow-y-auto px-1 py-1">
+                  <FilesystemBrowser
+                    key={browserKey}
+                    selectedPath={selectedPath}
+                    onSelect={setSelectedPath}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+            {selectedPath ? (
+              <p className="text-sm text-zinc-700 dark:text-zinc-300">
+                <span className="font-medium">Folder selected:</span>{" "}
+                <span className="font-mono">{selectedPath}</span>
+              </p>
+            ) : (
+              <p className="text-sm text-zinc-400 dark:text-zinc-500">
+                Click a folder above to select it for import.
+              </p>
+            )}
+          </section>
+
+          <section className="space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="flex-1 space-y-1">
+                <label
+                  htmlFor="import-label"
+                  className="text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Label{" "}
+                  <span className="font-normal text-zinc-400 dark:text-zinc-500">(optional)</span>
+                </label>
+                <input
+                  id="import-label"
+                  type="text"
+                  value={label}
+                  onChange={(e) => setLabel(e.target.value)}
+                  placeholder="e.g. Summer Trip 2024"
+                  className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 outline-none transition-colors focus:border-zinc-400 focus:ring-2 focus:ring-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder-zinc-500 dark:focus:border-zinc-500 dark:focus:ring-zinc-800"
+                />
+              </div>
+              <Button
+                onClick={() => void handleStartImport()}
+                disabled={!selectedPath || submitting}
+                size="lg"
+                className="shrink-0"
+              >
+                {submitting ? "Starting…" : "Start Import"}
+              </Button>
+            </div>
+            {submitError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-400">
+                {submitError}
               </div>
             )}
-            {/* Tree */}
-            <div className="max-h-72 overflow-y-auto px-1 py-1">
-              <FilesystemBrowser
-                key={browserKey}
-                selectedPath={selectedPath}
-                onSelect={setSelectedPath}
-              />
-            </div>
-          </CardContent>
-        </Card>
+          </section>
+        </TabsContent>
 
-        {/* Selection indicator */}
-        {selectedPath ? (
-          <p className="text-sm text-zinc-700 dark:text-zinc-300">
-            <span className="font-medium">Folder selected:</span>{" "}
-            <span className="font-mono">{selectedPath}</span>
-          </p>
-        ) : (
-          <p className="text-sm text-zinc-400 dark:text-zinc-500">
-            Click a folder above to select it for import.
-          </p>
-        )}
-      </section>
-
-      {/* ── Import Form ── */}
-      <section className="space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <div className="flex-1 space-y-1">
-            <label
-              htmlFor="import-label"
-              className="text-sm font-medium text-zinc-700 dark:text-zinc-300"
-            >
-              Label <span className="font-normal text-zinc-400 dark:text-zinc-500">(optional)</span>
-            </label>
-            <input
-              id="import-label"
-              type="text"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder="e.g. Summer Trip 2024"
-              className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 outline-none transition-colors focus:border-zinc-400 focus:ring-2 focus:ring-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder-zinc-500 dark:focus:border-zinc-500 dark:focus:ring-zinc-800"
-            />
-          </div>
-          <Button
-            onClick={() => void handleStartImport()}
-            disabled={!selectedPath || submitting}
-            size="lg"
-            className="shrink-0"
-          >
-            {submitting ? "Starting…" : "Start Import"}
-          </Button>
-        </div>
-
-        {submitError && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-400">
-            {submitError}
-          </div>
-        )}
-      </section>
+        <TabsContent value="upload">
+          <UploadDropzone onJobStarted={() => void fetchJobs()} />
+        </TabsContent>
+      </Tabs>
 
       <hr className="border-zinc-200 dark:border-zinc-800" />
 
-      {/* ── Recent Imports ── */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
