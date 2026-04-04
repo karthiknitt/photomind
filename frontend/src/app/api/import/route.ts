@@ -23,10 +23,16 @@ interface ImportJobResponse {
 
 // ─── Security ─────────────────────────────────────────────────────────────────
 
-const SAFE_ROOTS = ["/media", "/mnt", "/home"];
+function getSafeRoots(): string[] {
+  const uploadsDir =
+    process.env.UPLOADS_DIR ?? path.join(process.env.HOME ?? os.homedir(), "photomind", "uploads");
+  return ["/media", "/mnt", "/home", uploadsDir];
+}
 
 function isPathAllowed(resolvedPath: string): boolean {
-  return SAFE_ROOTS.some((root) => resolvedPath === root || resolvedPath.startsWith(`${root}/`));
+  return getSafeRoots().some(
+    (root) => resolvedPath === root || resolvedPath.startsWith(`${root}/`)
+  );
 }
 
 // ─── GET /api/import — list recent import jobs ────────────────────────────────
@@ -99,7 +105,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // Security: must be under a safe root
   if (!isPathAllowed(resolvedPath)) {
     return NextResponse.json(
-      { error: "Access denied: path is outside allowed directories (/media, /mnt, /home)" },
+      { error: "Access denied: path is outside allowed directories" },
       { status: 403 }
     );
   }
