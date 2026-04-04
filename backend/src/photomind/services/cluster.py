@@ -153,8 +153,9 @@ def run_clustering(
         min_cluster_size=min_cluster_size,
         min_samples=min_samples,
         metric="euclidean",
-        cluster_selection_epsilon=0.4,  # cosine dist ~0.2 ≈ same person threshold
-        copy=True,  # prevents in-place mutation that triggers scalar conversion bug
+        # cluster_selection_epsilon omitted: epsilon > 0 triggers a sklearn Cython
+        # traverse_upwards path that crashes on 20k+ embeddings (array-to-scalar bug).
+        # HDBSCAN clusters well on L2-normalised ArcFace embeddings without it.
     )
     labels: np.ndarray = hdbscan.fit_predict(X)
 
