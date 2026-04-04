@@ -131,7 +131,7 @@ def run_clustering(
     import numpy as np
     from sklearn.cluster import HDBSCAN
 
-    X = np.array(embeddings, dtype=np.float32)
+    X = np.array(embeddings, dtype=np.float64)
     # L2-normalise so euclidean distance == cosine distance.
     # InsightFace (ArcFace) embeddings are designed for cosine similarity;
     # raw euclidean distance on unnormalised vectors conflates magnitude
@@ -139,11 +139,22 @@ def run_clustering(
     norms = np.linalg.norm(X, axis=1, keepdims=True)
     norms = np.where(norms == 0, 1.0, norms)  # avoid divide-by-zero
     X = X / norms
+    # Filter out any NaN/inf rows that would corrupt HDBSCAN tree traversal
+    valid_mask = np.isfinite(X).all(axis=1)
+    n_invalid = int((~valid_mask).sum())
+    if n_invalid:
+        logger.warning("cluster: dropping %d face(s) with non-finite embeddings", n_invalid)
+        face_ids = [fid for fid, ok in zip(face_ids, valid_mask.tolist()) if ok]
+        X = X[valid_mask]
+        n_faces = len(face_ids)
+    if n_faces < min_cluster_size:
+        return ClusterResult(n_faces=n_faces, n_clusters=0, n_noise=n_faces)
     hdbscan = HDBSCAN(
         min_cluster_size=min_cluster_size,
         min_samples=min_samples,
         metric="euclidean",
         cluster_selection_epsilon=0.4,  # cosine dist ~0.2 ≈ same person threshold
+        copy=True,  # prevents in-place mutation that triggers scalar conversion bug
     )
     labels: np.ndarray = hdbscan.fit_predict(X)
 

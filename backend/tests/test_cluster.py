@@ -321,6 +321,43 @@ class TestRunClusteringSuccess:
             assert before <= c["created_at"] <= after
 
 
+class TestRunClusteringNanFilter:
+    def test_nan_embeddings_are_dropped(self, tmp_path: Path, cluster_mod: Any) -> None:
+        """Faces with NaN embeddings are filtered out before HDBSCAN runs."""
+        face_ids = [str(uuid.uuid4()) for _ in range(3)]
+        photo_ids = ["photo-a", "photo-b", "photo-c"]
+        db_path = tmp_path / "test.db"
+        _make_db(db_path, list(zip(face_ids, photo_ids, strict=True)))
+
+        # face 0 and 1 are valid; face 2 has NaN
+        emb_a = [1.0] + [0.0] * 511
+        emb_b = [0.999, 0.01] + [0.0] * 510
+        emb_nan = [float("nan")] * 512
+
+        mock_client = _mock_chroma(face_ids, [emb_a, emb_b, emb_nan])
+
+        # Should not raise — NaN face is silently dropped
+        result = cluster_mod.run_clustering(db_path, mock_client, min_cluster_size=2)
+        assert result.n_faces == 2  # only valid faces counted
+
+    def test_inf_embeddings_are_dropped(self, tmp_path: Path, cluster_mod: Any) -> None:
+        """Faces with inf embeddings are filtered out before HDBSCAN runs."""
+        face_ids = [str(uuid.uuid4()) for _ in range(4)]
+        photo_ids = [f"photo-{i}" for i in range(4)]
+        db_path = tmp_path / "test.db"
+        _make_db(db_path, list(zip(face_ids, photo_ids, strict=True)))
+
+        center_a = [1.0] + [0.0] * 511
+        center_b = [0.0, 1.0] + [0.0] * 510
+        emb_inf = [float("inf")] + [0.0] * 511
+        embeddings = [center_a, center_b, center_a[:], emb_inf]
+
+        mock_client = _mock_chroma(face_ids, embeddings)
+
+        result = cluster_mod.run_clustering(db_path, mock_client, min_cluster_size=2)
+        assert result.n_faces == 3  # inf face dropped
+
+
 class TestClusterResult:
     def test_cluster_result_fields(self, tmp_path: Path, cluster_mod: Any) -> None:
         """ClusterResult has n_faces, n_clusters, n_noise attributes."""
