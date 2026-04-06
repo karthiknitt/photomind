@@ -110,7 +110,7 @@ describe("POST /api/upload", () => {
     const fd = makeFormData([{ name: "img.jpg", content: "D" }]);
     await callUpload(fd);
     expect(_spawn.fn).toHaveBeenCalled();
-    const spawnArgs = _spawn.fn.mock.calls[0] as [
+    const spawnArgs = _spawn.fn.mock.calls[0] as unknown as [
       string,
       string[],
       { detached: boolean; stdio: string },

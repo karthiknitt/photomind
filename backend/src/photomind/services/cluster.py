@@ -143,8 +143,12 @@ def run_clustering(
     valid_mask = np.isfinite(X).all(axis=1)
     n_invalid = int((~valid_mask).sum())
     if n_invalid:
-        logger.warning("cluster: dropping %d face(s) with non-finite embeddings", n_invalid)
-        face_ids = [fid for fid, ok in zip(face_ids, valid_mask.tolist()) if ok]
+        logger.warning(
+            "cluster: dropping %d face(s) with non-finite embeddings", n_invalid
+        )
+        face_ids = [
+            fid for fid, ok in zip(face_ids, valid_mask.tolist(), strict=False) if ok
+        ]
         X = X[valid_mask]
         n_faces = len(face_ids)
     if n_faces < min_cluster_size:
