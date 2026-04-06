@@ -1,15 +1,22 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-// ── mutable cells for module-level mocks ────────────────────────────────────
-const _db = { insert: mock(() => ({ values: mock(async () => {}) })) };
-const _spawn = { fn: mock(() => ({ unref: mock(() => {}) })) };
+// ── mutable cells (hoisted so vi.mock factories can reference them) ──────────
+const { _db, _spawn } = vi.hoisted(() => {
+  const _db = {
+    insert: vi.fn(() => ({ values: vi.fn(async () => {}) })),
+  };
+  const _spawn = {
+    fn: vi.fn(() => ({ unref: vi.fn(() => {}) })),
+  };
+  return { _db, _spawn };
+});
 
-mock.module("@/lib/db/client", () => ({ db: _db }));
-mock.module("node:child_process", () => ({ spawn: _spawn.fn }));
+vi.mock("@/lib/db/client", () => ({ db: _db }));
+vi.mock("node:child_process", () => ({ spawn: _spawn.fn }));
 
 function makeFormData(files: { name: string; content: string; relPath?: string }[]): FormData {
   const fd = new FormData();
@@ -37,9 +44,9 @@ describe("POST /api/upload", () => {
     process.env.UPLOADS_DIR = uploadsDir;
     process.env.DATABASE_PATH = path.join(uploadsDir, "test.db");
     _db.insert.mockReset();
-    _db.insert.mockImplementation(() => ({ values: mock(async () => {}) }));
+    _db.insert.mockImplementation(() => ({ values: vi.fn(async () => {}) }));
     _spawn.fn.mockReset();
-    _spawn.fn.mockImplementation(() => ({ unref: mock(() => {}) }));
+    _spawn.fn.mockImplementation(() => ({ unref: vi.fn(() => {}) }));
   });
 
   afterEach(async () => {
